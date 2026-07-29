@@ -145,6 +145,16 @@ const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
 /* ── SQLite ─────────────────────────────────────────────────────── */
 
 async function openSqlite(): Promise<Database> {
+  // Vercel's filesystem is read-only outside /tmp, so a SQLite file can't
+  // persist there. Fail with a clear instruction now, rather than a cryptic
+  // EROFS from mkdirSync the moment someone hits the first page.
+  if (process.env.VERCEL) {
+    throw new Error(
+      "No DATABASE_URL is set. On Vercel, set DATABASE_URL to a Postgres connection string " +
+        "(Storage tab → Create Database, or neon.tech / supabase.com) — SQLite has nowhere to write.",
+    );
+  }
+
   const { default: SqliteDatabase } = await import("better-sqlite3");
 
   const dir = process.env.HANDLED_DATA_DIR ?? path.join(process.cwd(), ".data");
