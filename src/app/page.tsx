@@ -117,6 +117,18 @@ export default async function LandingPage() {
               </p>
             </div>
           </div>
+
+          <div className="enter" style={{ animationDelay: "0.4s" }}>
+            <div className="container-tight pb-20 md:pb-28">
+              <img
+                src="/marketing/hero.jpg"
+                alt="A hand-tied bouquet of roses beside a wrapped gift box and an open desk calendar"
+                width={1600}
+                height={1075}
+                className="w-full rounded-[--radius-lg] border border-line object-cover shadow-[0_30px_60px_-30px_rgba(34,32,28,0.35)]"
+              />
+            </div>
+          </div>
         </section>
 
         {/* ── Houses we order from ────────────────────────────── */}
@@ -150,6 +162,19 @@ export default async function LandingPage() {
               ))}
             </div>
           </div>
+        </section>
+
+        {/* ── The moment it lands ─────────────────────────────── */}
+        <section className="border-y border-line">
+          <Reveal>
+            <img
+              src="/marketing/lifestyle-desk.jpg"
+              alt="Her hands untying the ribbon on a bouquet that arrived at her desk"
+              width={1600}
+              height={1073}
+              className="h-[26rem] w-full object-cover md:h-[34rem]"
+            />
+          </Reveal>
         </section>
 
         {/* ── The year, as an itinerary ───────────────────────── */}
