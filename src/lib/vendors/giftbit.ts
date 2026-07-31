@@ -102,7 +102,8 @@ export function campaignBody({ mission, product, recipient, buyer }: OrderReques
       `This is the ${product.name} you set aside. Choose whatever suits, then surprise her ` +
       `with it — she has no idea, and that is rather the point.`,
     // Whole regional catalogue unless we've pinned a brand, so he has a choice.
-    ...(product.vendorSku ? { brand_codes: [product.vendorSku] } : { region: 1 }),
+    // Region 2 is Giftbit's USA catalogue — the only market this app serves.
+    ...(product.vendorSku ? { brand_codes: [product.vendorSku] } : { region: 2 }),
     contacts: [
       {
         firstname: firstname || "there",
