@@ -72,8 +72,11 @@ async function call<T>(
   return json as T;
 }
 
+// Giftbit's USA catalogue — the only market this app serves. (1 is Canada.)
+const USA_REGION = 2;
+
 /** Brands redeemable at a given price — used to build the catalogue. */
-export async function brandsAt(priceCents: number, region = 1) {
+export async function brandsAt(priceCents: number, region = USA_REGION) {
   const query = new URLSearchParams({
     region: String(region),
     min_price_in_cents: String(priceCents),
@@ -86,11 +89,26 @@ export async function brandsAt(priceCents: number, region = 1) {
 }
 
 /**
+ * `POST /campaign` has no "whole region" option — it always wants explicit
+ * `brand_codes`. Pinned SKU aside, we have to look up what's redeemable at
+ * this exact price first and hand over that whole list, so he still gets a
+ * choice across the catalogue rather than one forced brand.
+ */
+async function brandCodesFor(product: OrderRequest["product"]): Promise<string[]> {
+  if (product.vendorSku) return [product.vendorSku];
+  const { brands } = await brandsAt(product.priceCents);
+  return brands.map((b) => b.brand_code);
+}
+
+/**
  * Builds the campaign body. Exported so a test can assert the one thing that
  * must never regress: the contact is the buyer, and the recipient's details
  * appear nowhere in the payload.
  */
-export function campaignBody({ mission, product, recipient, buyer }: OrderRequest) {
+export function campaignBody(
+  { mission, product, recipient, buyer }: OrderRequest,
+  brandCodes: string[],
+) {
   const [firstname, ...rest] = (buyer.name || buyer.email).trim().split(/\s+/);
 
   return {
@@ -101,9 +119,7 @@ export function campaignBody({ mission, product, recipient, buyer }: OrderReques
     message:
       `This is the ${product.name} you set aside. Choose whatever suits, then surprise her ` +
       `with it — she has no idea, and that is rather the point.`,
-    // Whole regional catalogue unless we've pinned a brand, so he has a choice.
-    // Region 2 is Giftbit's USA catalogue — the only market this app serves.
-    ...(product.vendorSku ? { brand_codes: [product.vendorSku] } : { region: 2 }),
+    brand_codes: brandCodes,
     contacts: [
       {
         firstname: firstname || "there",
@@ -125,9 +141,17 @@ export const giftbitAdapter: FulfillmentAdapter = {
     }
 
     try {
+      const brandCodes = await brandCodesFor(product);
+      if (brandCodes.length === 0) {
+        return {
+          ok: false,
+          reason: `No Giftbit brand is redeemable at exactly $${(product.priceCents / 100).toFixed(2)}.`,
+        };
+      }
+
       const result = await call<CampaignResponse>("/campaign", {
         method: "POST",
-        body: campaignBody(request),
+        body: campaignBody(request, brandCodes),
       });
 
       const status = result.campaign?.status ?? "";

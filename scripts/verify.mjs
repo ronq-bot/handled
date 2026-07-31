@@ -448,7 +448,7 @@ check("giftbit stays dormant without a key", () => {
 });
 
 check("the credit is addressed to the buyer, never the recipient", () => {
-  const body = campaignBody(order);
+  const body = campaignBody(order, ["amazonus"]);
   assert.equal(body.contacts.length, 1);
   assert.equal(body.contacts[0].email, "mike@example.com");
   assert.equal(body.contacts[0].firstname, "Mike");
@@ -456,13 +456,13 @@ check("the credit is addressed to the buyer, never the recipient", () => {
 
 check("no recipient contact detail can leak into the payload", () => {
   // Whole-payload sweep: her address and any address-shaped string must be absent.
-  const serialised = JSON.stringify(campaignBody(order));
+  const serialised = JSON.stringify(campaignBody(order, ["amazonus"]));
   assert.equal(/412 Rosewood/.test(serialised), false);
   assert.equal(/@/.test(serialised.replace("mike@example.com", "")), false);
 });
 
 check("her name may appear only as a reference for him, not as a contact", () => {
-  const body = campaignBody(order);
+  const body = campaignBody(order, ["amazonus"]);
   assert.match(body.subject, /Dana/);
   assert.equal(JSON.stringify(body.contacts).includes("Dana"), false);
 });
