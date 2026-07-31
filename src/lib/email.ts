@@ -83,6 +83,24 @@ export function emailOrderPlaced(o: OrderMail) {
   });
 }
 
+export function emailUpcomingOrder(
+  o: OrderMail & { daysUntilShip: number; changeUrl: string },
+) {
+  const when = o.daysUntilShip <= 1 ? "tomorrow" : `in ${o.daysUntilShip} days`;
+  return send({
+    to: o.to,
+    subject: `Going out ${when} — ${o.gift} for ${o.recipient}`,
+    heading: `This goes out ${when}.`,
+    body: [
+      `${o.firstName}, <strong>${o.gift}</strong> for ${o.occasion} is scheduled to be ordered ${when}, arriving ${formatLong(o.deliverOn)} ${o.where}.`,
+      "Nothing to do if that's right — it'll go in on its own and you'll get a receipt.",
+      `Want a different gift, or to move the date? <a href="${o.changeUrl}" style="color:#1f3d2b">Change it before it ships →</a>`,
+    ],
+    footer:
+      "This is a heads-up, not an action item. To cancel a gift outright rather than change it, log in and use Cancel on the gift's page — we don't put a cancel link in email.",
+  });
+}
+
 export function emailArrivingToday(o: OrderMail) {
   return send({
     to: o.to,

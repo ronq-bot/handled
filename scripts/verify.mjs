@@ -313,6 +313,57 @@ const status = async (id) => (await db.get(`SELECT status FROM missions WHERE id
   console.log("  ok  a malformed postal code fails before anyone is disappointed");
 }
 
+{
+  const id = await seed();
+  await runDispatch("2026-08-14");
+  const events = await db.get(
+    `SELECT COUNT(*) AS n FROM mission_events WHERE mission_id = ? AND status = 'reminder'`,
+    [id],
+  );
+  assert.equal(Number(events.n), 0);
+  passed += 1;
+  console.log("  ok  no reminder yet when the ship date is more than 3 days out");
+}
+
+{
+  const id = await seed();
+  const report = await runDispatch("2026-08-16");
+  assert.equal(report.reminded.includes(id), true);
+  const events = await db.get(
+    `SELECT COUNT(*) AS n FROM mission_events WHERE mission_id = ? AND status = 'reminder'`,
+    [id],
+  );
+  assert.equal(Number(events.n), 1);
+  assert.equal(await status(id), "scheduled");
+  passed += 1;
+  console.log("  ok  a reminder fires 3 days ahead of the ship date, without touching status");
+}
+
+{
+  const id = await seed();
+  await runDispatch("2026-08-16");
+  await runDispatch("2026-08-17");
+  const events = await db.get(
+    `SELECT COUNT(*) AS n FROM mission_events WHERE mission_id = ? AND status = 'reminder'`,
+    [id],
+  );
+  assert.equal(Number(events.n), 1);
+  passed += 1;
+  console.log("  ok  the reminder is sent once, not once per day it stays scheduled");
+}
+
+{
+  const id = await seed();
+  await runDispatch("2026-08-18");
+  const events = await db.get(
+    `SELECT COUNT(*) AS n FROM mission_events WHERE mission_id = ? AND status = 'reminder'`,
+    [id],
+  );
+  assert.equal(Number(events.n), 0);
+  passed += 1;
+  console.log("  ok  no reminder on the ship day itself — that's what the order-placed email is for");
+}
+
 console.log("\ndata layer");
 
 check("the driver matches whether DATABASE_URL is set", () => {

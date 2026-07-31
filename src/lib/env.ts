@@ -12,9 +12,28 @@ const read = (name: string): string | undefined => {
   return value ? value : undefined;
 };
 
+/**
+ * Absolute origin, needed for Stripe redirects and email links. An explicit
+ * HANDLED_APP_URL always wins; otherwise Vercel's own env vars give us the
+ * answer — the stable production domain if this is a production deploy, the
+ * per-deployment URL for preview builds — so a first deploy needs no manual
+ * "guess the URL, then set it" step.
+ */
+function resolveAppUrl(): string {
+  const explicit = read("HANDLED_APP_URL");
+  if (explicit) return explicit;
+
+  const productionHost = read("VERCEL_PROJECT_PRODUCTION_URL");
+  if (productionHost && read("VERCEL_ENV") === "production") return `https://${productionHost}`;
+
+  const deploymentHost = read("VERCEL_URL");
+  if (deploymentHost) return `https://${deploymentHost}`;
+
+  return "http://localhost:3000";
+}
+
 export const env = {
-  /** Absolute origin, needed for Stripe redirects and email links. */
-  appUrl: read("HANDLED_APP_URL") ?? "http://localhost:3000",
+  appUrl: resolveAppUrl(),
 
   stripeSecretKey: read("STRIPE_SECRET_KEY"),
   stripeWebhookSecret: read("STRIPE_WEBHOOK_SECRET"),

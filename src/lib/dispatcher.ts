@@ -3,19 +3,23 @@ import { getDb, nowIso } from "./db";
 import { getProduct, type Product } from "./catalog";
 import { adapterFor } from "./fulfillment";
 import { chargeForMission, userCanBeCharged } from "./payments";
-import { emailDelivered, emailFailed, emailOrderPlaced } from "./email";
+import { emailDelivered, emailFailed, emailOrderPlaced, emailUpcomingOrder } from "./email";
 import { env } from "./env";
 import { logMissionEvent } from "./queries";
-import { today, type IsoDate } from "./date";
+import { addDays, daysBetween, today, type IsoDate } from "./date";
 import type { Address, Mission, Recipient, User } from "./types";
 
 export type DispatchReport = {
   asOf: IsoDate;
+  reminded: string[];
   placed: string[];
   shipped: string[];
   delivered: string[];
   failed: { id: string; reason: string }[];
 };
+
+/** How far ahead of the ship date the heads-up email goes out. */
+const REMINDER_DAYS_BEFORE = 3;
 
 /**
  * The heartbeat. Idempotent by design — running it twice on the same day is a
@@ -23,9 +27,34 @@ export type DispatchReport = {
  * In production this is a cron hitting /api/cron/dispatch once an hour.
  */
 export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchReport> {
-  const report: DispatchReport = { asOf, placed: [], shipped: [], delivered: [], failed: [] };
+  const report: DispatchReport = {
+    asOf,
+    reminded: [],
+    placed: [],
+    shipped: [],
+    delivered: [],
+    failed: [],
+  };
 
   const db = await getDb();
+
+  // Heads-up email, once per gift, before it's ordered and charged. Gated on
+  // a mission_events row rather than a status change, since the mission is
+  // still just "scheduled" — this only ever informs, never blocks the ship.
+  const dueForReminder = await db.all<Mission>(
+    `SELECT * FROM missions m
+     WHERE m.status = 'scheduled' AND m.ship_on > ? AND m.ship_on <= ?
+       AND NOT EXISTS (
+         SELECT 1 FROM mission_events e WHERE e.mission_id = m.id AND e.status = 'reminder'
+       )
+     ORDER BY m.ship_on`,
+    [asOf, addDays(asOf, REMINDER_DAYS_BEFORE)],
+  );
+  for (const mission of dueForReminder) {
+    await sendReminder(mission, asOf);
+    report.reminded.push(mission.id);
+  }
+
   const due = await db.all<Mission>(
     `SELECT * FROM missions WHERE status = 'scheduled' AND ship_on <= ? ORDER BY ship_on`,
     [asOf],
@@ -168,6 +197,36 @@ async function occasionTitle(occasionId: string): Promise<string> {
     occasionId,
   ]);
   return row?.title ?? "the date";
+}
+
+async function sendReminder(mission: Mission, asOf: IsoDate): Promise<void> {
+  const db = await getDb();
+  const product = getProduct(mission.product_id);
+  const recipient = await db.get<Recipient>(`SELECT * FROM recipients WHERE id = ?`, [
+    mission.recipient_id,
+  ]);
+  const address = await db.get<Address>(`SELECT * FROM addresses WHERE id = ?`, [
+    mission.address_id,
+  ]);
+  const user = await db.get<User>(`SELECT * FROM users WHERE id = ?`, [mission.user_id]);
+  if (!product || !recipient || !address || !user) return;
+
+  await emailUpcomingOrder({
+    to: user.email,
+    firstName: firstNameOf(user),
+    gift: product.name,
+    recipient: recipient.name,
+    occasion: await occasionTitle(mission.occasion_id),
+    deliverOn: mission.deliver_on,
+    where: describe(address),
+    daysUntilShip: daysBetween(asOf, mission.ship_on),
+    changeUrl: `${env.appUrl}/dashboard/gifts/${mission.id}`,
+  });
+  await logMissionEvent(
+    mission.id,
+    "reminder",
+    `Heads-up sent — ordering in ${daysBetween(asOf, mission.ship_on)} day(s).`,
+  );
 }
 
 async function notifyFailure(
