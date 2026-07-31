@@ -8,6 +8,7 @@ import {
   createAddressAction,
   createRecipientAction,
   deleteAddressAction,
+  deleteRecipientAction,
   updateRecipientAction,
 } from "../../actions";
 import type { AddressKind } from "@/lib/types";
@@ -256,6 +257,16 @@ export default async function PeoplePage({
                 </form>
               </details>
             </div>
+
+            <form action={deleteRecipientAction} className="mt-6 border-t border-line pt-5">
+              <input type="hidden" name="id" value={r.id} />
+              <button type="submit" className="btn btn-ghost text-muted hover:text-claret">
+                Remove {r.name} entirely
+              </button>
+              <p className="mt-2 text-xs text-faint">
+                Also removes their addresses, dates, and any gifts scheduled for them.
+              </p>
+            </form>
           </section>
         );
       })}
