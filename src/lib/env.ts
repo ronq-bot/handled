@@ -39,7 +39,7 @@ export const env = {
   stripeWebhookSecret: read("STRIPE_WEBHOOK_SECRET"),
 
   resendApiKey: read("RESEND_API_KEY"),
-  emailFrom: read("HANDLED_EMAIL_FROM") ?? "Handled <orders@handled.gift>",
+  emailFrom: read("HANDLED_EMAIL_FROM") ?? "Handled <orders@handledthis.com>",
 
   databaseUrl: read("DATABASE_URL"),
 
