@@ -78,20 +78,22 @@ export const COVERAGE: Coverage[] = [
   {
     vendorId: "cocoa_line",
     categories: ["chocolate", "bakery"],
-    partner: "Giftnote",
-    url: "https://www.giftnote.com/features/gifting-api",
-    readiness: "apply",
-    dateGuarantee: "Carrier-based, tracked across 100+ carriers. Estimated rather than promised.",
-    gap: "Storefront and server-side APIs exist, but onboarding goes through their team rather than a signup form.",
+    partner: "Goody",
+    url: "https://developer.ongoody.com/",
+    readiness: "live",
+    dateGuarantee:
+      "Posted on the day, not promised for one. They commit to the send; arrival is a carrier estimate, which is what the product's lead time already models.",
+    gap: "None in code. Add GOODY_API_KEY — self-serve, free sandbox. Each product needs its Goody catalogue id before it can ship.",
   },
   {
     vendorId: "hearthside",
     categories: ["spa", "plant"],
-    partner: "Sendoso / Snappy",
-    url: "https://developer.sendoso.com/rest-api/overview/introduction",
-    readiness: "apply",
-    dateGuarantee: "Carrier-based. Built for volume sending, not for a specific promised date.",
-    gap: "Both are enterprise sales motions with minimums. Sensible at scale, wrong for a first integration.",
+    partner: "Goody",
+    url: "https://developer.ongoody.com/",
+    readiness: "live",
+    dateGuarantee:
+      "Posted on the day, not promised for one — the same send-date commitment as their confectionery range.",
+    gap: "None in code. Shares the Goody adapter with Cocoa Line. Note their recipients may swap a gift, so the category is right but the exact item is not guaranteed.",
   },
   {
     vendorId: "cellar_seven",

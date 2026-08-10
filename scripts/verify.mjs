@@ -416,7 +416,7 @@ check("the coverage map accounts for every product exactly once", () => {
 
 check("every partner marked automated has an adapter behind it", () => {
   const live = COVERAGE.filter((c) => c.readiness === "live").map((c) => c.partner).sort();
-  assert.deepEqual(live, ["Florist One", "Giftbit"]);
+  assert.deepEqual(live, ["Florist One", "Giftbit", "Goody", "Goody"]);
 });
 
 check("nothing claims to be dispatching without credentials", () => {
@@ -553,6 +553,80 @@ check("the recipient record has no contact route at all", () => {
   console.log("  ok  a buyer with no email fails before any network call");
 }
 
+console.log("\ngoody adapter — shipped to her, signed by him");
+
+const { goodyAdapter, goodyIsLive, orderBatchBody } = await import("../src/lib/vendors/goody.ts");
+
+const goodyOrder = {
+  mission: { id: "msn_g", gift_message: "Happy birthday. — M", deliver_on: "2026-08-20" },
+  product: { id: "cookie_tin_bakery", name: "Bakery Cookie Tin", priceCents: 5200, vendorSku: "abc-uuid" },
+  recipient: { name: "Dana Ruiz" },
+  address: { line1: "412 Rosewood Ln", line2: "Apt 3", city: "Charlotte", state: "NC", postal_code: "28202", country: "US" },
+  buyer: { name: "Mike Ruiz", email: "mike@example.com" },
+};
+
+check("goody stays dormant without a key", () => {
+  assert.equal(goodyIsLive(), false);
+});
+
+check("the parcel is addressed to her, and the card is signed by him", () => {
+  // Goody is the one live partner that ships straight to the recipient, so
+  // the two identities travel in the same payload and must not be swapped.
+  const body = orderBatchBody(goodyOrder);
+  assert.equal(body.from_name, "Mike Ruiz");
+  assert.equal(body.recipients[0].mailing_address.address_1, "412 Rosewood Ln");
+  assert.equal(body.recipients[0].first_name, "Dana");
+  assert.equal(body.recipients[0].mailing_address.postal_code, "28202");
+});
+
+check("her email address is never sent, because we do not hold one", () => {
+  // The surprise depends on Goody never contacting her directly.
+  const serialised = JSON.stringify(orderBatchBody(goodyOrder));
+  assert.equal(/@/.test(serialised), false);
+});
+
+check("the mission id is the idempotency key", () => {
+  assert.equal(orderBatchBody(goodyOrder).customer_reference_id, "msn_g");
+});
+
+check("a message never travels without the card Goody requires", () => {
+  // They reject a bare message with a 422, so the two move together or not
+  // at all. No GOODY_CARD_ID is configured here, so neither should appear.
+  const body = orderBatchBody(goodyOrder);
+  assert.equal("message" in body, false);
+  assert.equal("card_id" in body, false);
+});
+
+check("we never hand Goody a send date — our own dispatcher owns the timing", () => {
+  assert.equal("scheduled_send_on" in orderBatchBody(goodyOrder), false);
+});
+
+{
+  const result = await goodyAdapter.placeOrder(goodyOrder);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /not configured/i);
+  passed += 1;
+  console.log("  ok  without a key it fails on configuration, not on data");
+}
+
+{
+  const noSku = { ...goodyOrder, product: { ...goodyOrder.product, vendorSku: undefined } };
+  const result = await goodyAdapter.placeOrder(noSku);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /no goody product id/i);
+  passed += 1;
+  console.log("  ok  a product with no Goody id is refused before any network call");
+}
+
+{
+  const noStreet = { ...goodyOrder, address: { ...goodyOrder.address, line1: "  " } };
+  const result = await goodyAdapter.placeOrder(noStreet);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /street address/i);
+  passed += 1;
+  console.log("  ok  an incomplete address is caught before it reaches them");
+}
+
 console.log("\nintegrations");
 
 const { integrationStatus } = await import("../src/lib/env.ts");
@@ -564,6 +638,7 @@ check("an integration is live only when its own key is present", () => {
     email: Boolean(process.env.RESEND_API_KEY),
     database: Boolean(process.env.DATABASE_URL),
     giftcards: Boolean(process.env.GIFTBIT_API_KEY),
+    curatedgifts: Boolean(process.env.GOODY_API_KEY),
     florist: Boolean(process.env.FLORIST_ONE_API_USER && process.env.FLORIST_ONE_API_PASSWORD),
   };
   for (const i of integrationStatus()) {

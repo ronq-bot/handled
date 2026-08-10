@@ -50,10 +50,22 @@ export const env = {
   /** "production" switches off the testbed host. Anything else stays sandboxed. */
   giftbitEnv: read("GIFTBIT_ENV") ?? "testbed",
 
+  goodyApiKey: read("GOODY_API_KEY"),
+  /** "production" switches off the sandbox host. Anything else stays sandboxed. */
+  goodyEnv: read("GOODY_ENV") ?? "sandbox",
+  /** Goody only accepts a gift message alongside one of their card designs. */
+  goodyCardId: read("GOODY_CARD_ID"),
+
   cronSecret: read("HANDLED_CRON_SECRET"),
 } as const;
 
-export type IntegrationKey = "payments" | "email" | "database" | "florist" | "giftcards";
+export type IntegrationKey =
+  | "payments"
+  | "email"
+  | "database"
+  | "florist"
+  | "giftcards"
+  | "curatedgifts";
 
 export type IntegrationStatus = {
   key: IntegrationKey;
@@ -107,6 +119,16 @@ export function integrationStatus(): IntegrationStatus[] {
         : "Experience gifts are simulated locally.",
       needs: "GIFTBIT_API_KEY",
       where: "testbedapp.giftbit.com — self-serve sandbox, no sales call",
+    },
+    {
+      key: "curatedgifts",
+      name: "Goody",
+      live: Boolean(env.goodyApiKey),
+      behaviour: env.goodyApiKey
+        ? `Curated gifts ship to her address for real${env.goodyEnv === "production" ? "" : " (sandbox — nothing is charged)"}.`
+        : "Chocolate, bakery, spa and home gifts are simulated locally.",
+      needs: "GOODY_API_KEY",
+      where: "developer.ongoody.com — self-serve key, free sandbox",
     },
     {
       key: "florist",
