@@ -97,6 +97,39 @@ the test suite.
 
 ---
 
+## Working on this with someone else
+
+`main` is the deployed branch, so nothing lands on it directly. Work goes on a
+branch and arrives through a pull request.
+
+```bash
+git feature add-gift-notes    # branches off an up-to-date main
+# ...commit as usual...
+git pr                        # pushes and opens the PR
+```
+
+A `pre-push` hook refuses direct pushes to `main` and tells you how to move
+commits onto a branch if you started there by habit. Deliberate exceptions —
+a hotfix, a revert — go through `ALLOW_MAIN_PUSH=1 git push origin main`.
+
+**In a fresh clone the hook is off until you point git at it**, since git will
+not run version-controlled hooks by default:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+### Two remotes
+
+`origin` pushes to both `babygenie22/handled` and `ronq-bot/handled`, so one
+`git push` mirrors to both accounts. Fetches come from `babygenie22` only —
+that is the source of truth, and `ronq-bot` is the backup copy.
+
+Since nothing pulls back automatically, `git sync-check` reports whether the
+two have drifted and which commits are on one but not the other.
+
+---
+
 ## How it fits together
 
 ```

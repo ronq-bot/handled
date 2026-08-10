@@ -1,0 +1,47 @@
+#!/bin/sh
+#
+# Refuse to push straight to main.
+#
+# GitHub's own branch protection needs Pro on a private repo, so this stands in
+# for it. It is strictly weaker — a hook only guards the clone it is enabled in,
+# and anyone can skip it — but it catches the mistake that actually happens:
+# finishing a change on main out of habit and pushing before noticing.
+#
+# Enable it in a fresh clone with:
+#   git config core.hooksPath .githooks
+#
+# To push to main on purpose (a hotfix, a revert):
+#   ALLOW_MAIN_PUSH=1 git push origin main
+
+if [ "$ALLOW_MAIN_PUSH" = "1" ]; then
+  exit 0
+fi
+
+# stdin is: <local ref> <local sha> <remote ref> <remote sha>
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      echo ""
+      echo "  Blocked: pushing directly to main."
+      echo ""
+      echo "  Put this on a branch instead:"
+      echo ""
+      echo "      git switch -c my-change"
+      echo "      git push -u origin my-change"
+      echo "      git pr                        # opens the pull request"
+      echo ""
+      echo "  Already committed to main? Move those commits onto a branch:"
+      echo ""
+      echo "      git switch -c my-change       # keeps your commits"
+      echo "      git branch -f main @{u}       # rewinds main to the remote"
+      echo ""
+      echo "  Genuinely need to push main (hotfix, revert):"
+      echo ""
+      echo "      ALLOW_MAIN_PUSH=1 git push origin main"
+      echo ""
+      exit 1
+      ;;
+  esac
+done
+
+exit 0
