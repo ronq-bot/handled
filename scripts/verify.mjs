@@ -431,6 +431,71 @@ check("every partner states a date guarantee and a gap", () => {
   }
 });
 
+console.log("\nflorist one adapter — never book an unconfirmed date");
+
+const { floristOneAdapter, floristOneIsLive, normaliseDate, parseDeliveryDates } = await import(
+  "../src/lib/vendors/florist-one.ts"
+);
+
+const flowerOrder = {
+  mission: { id: "msn_f", deliver_on: "2026-08-20", gift_message: "x" },
+  product: { id: "bouquet_garden_seasonal", name: "Seasonal Garden Bouquet", priceCents: 7400, vendorSku: "F1-123" },
+  recipient: { name: "Dana Ruiz" },
+  address: { line1: "1 Main St", line2: "", city: "Charlotte", state: "NC", postal_code: "28202", country: "US" },
+  buyer: { name: "Mike Ruiz", email: "mike@example.com" },
+};
+
+check("florist one stays dormant without credentials", () => {
+  assert.equal(floristOneIsLive(), false);
+});
+
+{
+  const result = await floristOneAdapter.placeOrder(flowerOrder);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /not configured/i);
+  passed += 1;
+  console.log("  ok  without credentials it fails on configuration, not on data");
+}
+
+{
+  // The product code is the only handle they have on the order. Our internal
+  // id means nothing to them, so a product without a SKU must be refused
+  // rather than sent and hoped for.
+  const noSku = { ...flowerOrder, product: { ...flowerOrder.product, vendorSku: undefined } };
+  const result = await floristOneAdapter.placeOrder(noSku);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /no florist one product code/i);
+  passed += 1;
+  console.log("  ok  a product with no vendor SKU is refused before any network call");
+}
+
+check("their MM/DD/YYYY dates become ours", () => {
+  assert.equal(normaliseDate("08/20/2026"), "2026-08-20");
+  assert.equal(normaliseDate("2026-08-20"), "2026-08-20");
+});
+
+check("a day-first date is rejected rather than becoming an impossible one", () => {
+  // 20/08/2026 read as MM/DD gives month 20. It has the right shape and would
+  // survive a naive parse, then never match anything.
+  assert.equal(normaliseDate("20/08/2026"), null);
+  assert.equal(normaliseDate("08/32/2026"), null);
+  assert.equal(normaliseDate("tomorrow"), null);
+});
+
+check("an unreadable date list throws instead of looking like no availability", () => {
+  // Parsing failures used to collapse to an empty array, which read as "they
+  // serve nothing there" — and, before this change, as permission to order.
+  assert.throws(() => parseDeliveryDates(["20/08/2026", "tomorrow"]), /unrecognised format/);
+});
+
+check("an genuinely empty calendar is not an error", () => {
+  assert.deepEqual(parseDeliveryDates([]), []);
+});
+
+check("readable dates survive alongside unreadable ones", () => {
+  assert.deepEqual(parseDeliveryDates(["08/20/2026", "junk"]), ["2026-08-20"]);
+});
+
 console.log("\ngiftbit adapter — the surprise invariant");
 
 const { giftbitAdapter, giftbitIsLive, campaignBody } = await import("../src/lib/vendors/giftbit.ts");
