@@ -2,6 +2,18 @@ import { addDays, daysBetween, previousBusinessDay, today, type IsoDate } from "
 import { leadDaysFor, type Product } from "./catalog";
 import type { Address } from "./types";
 
+/**
+ * How far ahead a gift may be committed to.
+ *
+ * A recurring date never trips this — `nextAnniversary` always lands inside a
+ * year — so in practice it catches one-off dates entered far out. The limit
+ * exists because a mission is a set of promises made at planning time that all
+ * decay: it stores the price, the product, the address and the card, and none
+ * of those survive two years unattended. Better to ask again than to ship
+ * something priced in 2026 against a card that expired in 2027.
+ */
+export const MAX_SCHEDULE_DAYS = 365;
+
 export type Plan = {
   deliverOn: IsoDate;
   shipOn: IsoDate;
@@ -12,6 +24,9 @@ export type Plan = {
   /** True when there isn't enough runway left to place this order. */
   tooLate: boolean;
   lateReason: string;
+  /** True when the date is further out than we're willing to commit to. */
+  tooFar: boolean;
+  farReason: string;
 };
 
 /**
@@ -43,6 +58,7 @@ export function planDelivery(
 
   const shipOn = addDays(deliverOn, -leadDays);
   const runway = daysBetween(from, shipOn);
+  const reach = daysBetween(from, deliverOn);
 
   return {
     deliverOn,
@@ -55,6 +71,11 @@ export function planDelivery(
       runway < 0
         ? `${product.name} needs ${leadDays} days of lead time and that ship date has already passed.`
         : "",
+    tooFar: reach > MAX_SCHEDULE_DAYS,
+    farReason:
+      reach > MAX_SCHEDULE_DAYS
+        ? `That date is over a year away. We schedule twelve months at a time, then ask you to look again — prices, addresses and cards all move in two years.`
+        : "",
   };
 }
 
@@ -65,7 +86,8 @@ export function isFeasible(
   address: Pick<Address, "kind" | "weekdays_only">,
   from: IsoDate = today(),
 ): boolean {
-  return !planDelivery(eventDate, product, address, from).tooLate;
+  const plan = planDelivery(eventDate, product, address, from);
+  return !plan.tooLate && !plan.tooFar;
 }
 
 export type RiskLevel = "clear" | "watch" | "warning" | "critical";

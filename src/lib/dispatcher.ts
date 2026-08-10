@@ -3,7 +3,13 @@ import { getDb, nowIso } from "./db";
 import { getProduct, type Product } from "./catalog";
 import { adapterFor } from "./fulfillment";
 import { chargeForMission, userCanBeCharged } from "./payments";
-import { emailDelivered, emailFailed, emailOrderPlaced, emailUpcomingOrder } from "./email";
+import {
+  emailDelivered,
+  emailFailed,
+  emailOrderPlaced,
+  emailRenewal,
+  emailUpcomingOrder,
+} from "./email";
 import { env } from "./env";
 import { logMissionEvent } from "./queries";
 import { addDays, daysBetween, today, type IsoDate } from "./date";
@@ -16,10 +22,22 @@ export type DispatchReport = {
   shipped: string[];
   delivered: string[];
   failed: { id: string; reason: string }[];
+  /** User ids asked to schedule another year. */
+  renewalsNudged: string[];
 };
 
 /** How far ahead of the ship date the heads-up email goes out. */
 const REMINDER_DAYS_BEFORE = 3;
+
+/** How little cover is left before we ask them to schedule another year. */
+const RENEWAL_NUDGE_DAYS = 30;
+
+/**
+ * Never nudge the same account twice inside this window. A year of gifts can
+ * finish and be replaced in a single sitting, so the guard has to outlast the
+ * gap rather than reset the moment cover runs out.
+ */
+const RENEWAL_QUIET_DAYS = 60;
 
 /**
  * The heartbeat. Idempotent by design — running it twice on the same day is a
@@ -34,6 +52,7 @@ export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchRepo
     shipped: [],
     delivered: [],
     failed: [],
+    renewalsNudged: [],
   };
 
   const db = await getDb();
@@ -173,7 +192,70 @@ export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchRepo
     report.delivered.push(id);
   }
 
+  report.renewalsNudged.push(...(await nudgeRenewals(asOf)));
+
   return report;
+}
+
+/**
+ * Ask accounts that are running out of scheduled gifts to set another year.
+ *
+ * We deliberately cap scheduling at twelve months, so every account eventually
+ * arrives here. It fires on the *last* gift on the calendar rather than on any
+ * individual date, because the thing worth saying is "you are about to have
+ * nothing scheduled", not "one date needs attention" — the dashboard already
+ * says the latter.
+ *
+ * Only accounts with a recurring date get this. Someone who scheduled a single
+ * one-off gift has not lapsed; they are finished.
+ */
+async function nudgeRenewals(asOf: IsoDate): Promise<string[]> {
+  const db = await getDb();
+  const nudged: string[] = [];
+
+  const candidates = await db.all<{
+    id: string;
+    email: string;
+    name: string;
+    renewal_nudged_at: string;
+    last_deliver: string | null;
+    recurring_count: number;
+  }>(
+    `SELECT u.id, u.email, u.name, u.renewal_nudged_at,
+            (SELECT MAX(m.deliver_on) FROM missions m
+              WHERE m.user_id = u.id AND m.status != 'canceled') AS last_deliver,
+            (SELECT COUNT(*) FROM occasions o
+              WHERE o.user_id = u.id AND o.recurring = 1) AS recurring_count
+       FROM users u`,
+  );
+
+  for (const row of candidates) {
+    // Never used the product, or has no date that will come round again.
+    if (!row.last_deliver || Number(row.recurring_count) === 0) continue;
+
+    // Still has more than a month of cover left.
+    if (daysBetween(asOf, row.last_deliver) > RENEWAL_NUDGE_DAYS) continue;
+
+    if (row.renewal_nudged_at) {
+      const since = daysBetween(row.renewal_nudged_at.slice(0, 10), asOf);
+      if (since < RENEWAL_QUIET_DAYS) continue;
+    }
+
+    await emailRenewal({
+      to: row.email,
+      firstName: row.name.split(" ")[0] || "there",
+      lastDate: row.last_deliver,
+      dateCount: Number(row.recurring_count),
+      planUrl: `${env.appUrl}/dashboard/dates`,
+    });
+
+    // Stamped whether or not the mail actually left — `send()` swallows its
+    // own failures, and a bounced nudge is not worth re-sending daily.
+    await db.run(`UPDATE users SET renewal_nudged_at = ? WHERE id = ?`, [nowIso(), row.id]);
+    nudged.push(row.id);
+  }
+
+  return nudged;
 }
 
 /* ── Notifications ──────────────────────────────────────────────

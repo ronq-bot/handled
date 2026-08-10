@@ -125,6 +125,27 @@ export function emailDelivered(o: OrderMail) {
   });
 }
 
+export function emailRenewal(o: {
+  to: string;
+  firstName: string;
+  lastDate: string;
+  dateCount: number;
+  planUrl: string;
+}) {
+  return send({
+    to: o.to,
+    subject: "Your year is nearly up",
+    heading: "Time to set the next twelve months.",
+    body: [
+      `${o.firstName}, the last gift on your calendar goes out ${formatLong(o.lastDate)}. After that there is nothing scheduled.`,
+      `Your ${o.dateCount === 1 ? "date is" : `${o.dateCount} dates are`} still on file and will roll forward — we just need you to choose what goes out against them, which is also a good moment to change a budget or an address if anything has moved.`,
+      `<a href="${o.planUrl}" style="color:#1f3d2b">Set the next twelve months →</a>`,
+    ],
+    footer:
+      "We schedule a year at a time on purpose. Prices, addresses and cards all drift, and we would rather ask than guess.",
+  });
+}
+
 export function emailFailed(o: OrderMail & { reason: string; fixUrl: string }) {
   return send({
     to: o.to,

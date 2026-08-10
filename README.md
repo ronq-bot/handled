@@ -29,7 +29,7 @@ npm run verify                                    # SQLite
 npm run verify:both -- postgresql://…/handled_test  # both engines
 ```
 
-60 checks covering calendar math, the picker's hard rules, delivery planning, risk scoring, the
+68 checks covering calendar math, the picker's hard rules, delivery planning, risk scoring, the
 dispatcher's state machine, the SQL placeholder translation and the integration fallbacks. Uses a
 throwaway database, and the whole suite runs green against **both** SQLite and Postgres.
 
@@ -166,6 +166,12 @@ to an office shift back to the Friday before, automatically, and the user is tol
 **The dispatcher is idempotent by construction.** Every transition is gated on current status,
 so running it twice in a day — or replaying a week — changes nothing. That's what makes a cron
 safe.
+
+**A year at a time, then we ask again.** `MAX_SCHEDULE_DAYS` refuses anything further out. A
+mission stores the price, the product, the address and the card, and none of those survive two
+years unattended — so when an account is within a month of running out of scheduled gifts, the
+dispatcher emails once asking for the next twelve months. Recurring dates never trip the limit,
+because `nextAnniversary` always lands inside a year; it catches one-off dates entered far out.
 
 ---
 
