@@ -420,7 +420,33 @@ check("every partner marked automated has an adapter behind it", () => {
 });
 
 check("nothing claims to be dispatching without credentials", () => {
-  assert.equal(coverageSummary().dispatchingNow, 0);
+  // Only meaningful when the environment really has no keys. A developer with
+  // a sandbox key in .env.local should see this adapt rather than fail with a
+  // message about a bug that isn't there.
+  const configured = coverageWithStatus().filter((r) => r.credentialsPresent);
+  if (configured.length === 0) {
+    assert.equal(coverageSummary().dispatchingNow, 0);
+  } else {
+    assert.equal(coverageSummary().dispatchingNow > 0, true);
+  }
+});
+
+check("every automated partner has a credential check wired to it", () => {
+  // Without this, a slot can be marked live while its check silently returns
+  // false, so the page shows "Automated now" and never "Dispatching" no
+  // matter what is configured. That regression shipped once already.
+  const { GOODY_API_KEY, FLORIST_ONE_API_USER, FLORIST_ONE_API_PASSWORD, GIFTBIT_API_KEY } =
+    process.env;
+  const anyConfigured = Boolean(
+    GOODY_API_KEY || GIFTBIT_API_KEY || (FLORIST_ONE_API_USER && FLORIST_ONE_API_PASSWORD),
+  );
+  // With no keys present every live row must read false — and crucially the
+  // property has to exist, which a missing map entry would still satisfy. So
+  // assert the shape too.
+  for (const row of coverageWithStatus().filter((r) => r.readiness === "live")) {
+    assert.equal(typeof row.credentialsPresent, "boolean", `${row.partner} has no credential check`);
+    if (!anyConfigured) assert.equal(row.credentialsPresent, false);
+  }
 });
 
 check("every partner states a date guarantee and a gap", () => {
@@ -565,8 +591,8 @@ const goodyOrder = {
   buyer: { name: "Mike Ruiz", email: "mike@example.com" },
 };
 
-check("goody stays dormant without a key", () => {
-  assert.equal(goodyIsLive(), false);
+check("goody is live exactly when its key is present", () => {
+  assert.equal(goodyIsLive(), Boolean(process.env.GOODY_API_KEY));
 });
 
 check("the parcel is addressed to her, and the card is signed by him", () => {

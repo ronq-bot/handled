@@ -1,6 +1,7 @@
 import { VENDORS, PRODUCTS, type ProductCategory } from "./catalog";
 import { floristOneIsLive } from "./vendors/florist-one";
 import { giftbitIsLive } from "./vendors/giftbit";
+import { goodyIsLive } from "./vendors/goody";
 
 /**
  * Which real-world partner would actually dispatch each category, and how far
@@ -121,17 +122,25 @@ export const READINESS_BLURB: Record<Readiness, string> = {
   manual: "No API we can use. A person places this order, or we don't offer it.",
 };
 
+/**
+ * Which check proves a slot is actually configured. Kept as a map beside the
+ * coverage data rather than a chain of comparisons, so adding a partner is one
+ * line here instead of an edit that is easy to forget — the previous shape
+ * silently reported a configured vendor as not dispatching.
+ */
+const CREDENTIAL_CHECKS: Record<string, () => boolean> = {
+  petal_post: floristOneIsLive,
+  moment_co: giftbitIsLive,
+  cocoa_line: goodyIsLive,
+  hearthside: goodyIsLive,
+};
+
 /** Adds the runtime truth — whether credentials are actually present. */
 export function coverageWithStatus() {
   return COVERAGE.map((c) => {
     const vendor = VENDORS[c.vendorId];
     const products = PRODUCTS.filter((p) => p.vendorId === c.vendorId);
-    const credentialsPresent =
-      c.vendorId === "petal_post"
-        ? floristOneIsLive()
-        : c.vendorId === "moment_co"
-          ? giftbitIsLive()
-          : false;
+    const credentialsPresent = CREDENTIAL_CHECKS[c.vendorId]?.() ?? false;
 
     return {
       ...c,

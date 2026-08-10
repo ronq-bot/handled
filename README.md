@@ -29,7 +29,7 @@ npm run verify                                    # SQLite
 npm run verify:both -- postgresql://…/handled_test  # both engines
 ```
 
-69 checks covering calendar math, the picker's hard rules, delivery planning, risk scoring, the
+70 checks covering calendar math, the picker's hard rules, delivery planning, risk scoring, the
 dispatcher's state machine, the SQL placeholder translation and the integration fallbacks. Uses a
 throwaway database, and the whole suite runs green against **both** SQLite and Postgres.
 
