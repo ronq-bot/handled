@@ -113,6 +113,15 @@ export type Product = {
   /** The partner's own catalogue code, when we have a live integration. */
   vendorSku?: string;
   /**
+   * The variant we have chosen from the partner's options — a flavour, a
+   * colour, a style. Some partners will not ship without one, and the choice
+   * is ours to make once here rather than the buyer's to make per order: he
+   * is picking "a box of truffles", not adjudicating milk against dark. Left
+   * unset when the product has no variants, or only one, which the adapter
+   * then selects on its own.
+   */
+  vendorVariants?: string[];
+  /**
    * The partner's own photograph of the product. Florist One returns one per
    * product and Giftbit returns one per brand, so with credentials in place
    * this is populated by `npm run sync:catalogue` rather than hand-written —
@@ -176,6 +185,8 @@ const BASE_PRODUCTS: Product[] = [
     category: "plant",
     priceCents: 8900,
     emoji: "🪴",
+    // Lively Root white phalaenopsis
+    vendorSku: "6cf449a8-006b-42cf-bb35-9d66d4baeaba",
     goodFor: ["birthday", "just_because", "mothers_day"],
     tags: ["plant", "orchid", "long-lasting", "minimal"],
     allergens: [],
@@ -219,6 +230,9 @@ const BASE_PRODUCTS: Product[] = [
     category: "chocolate",
     priceCents: 6800,
     emoji: "🍬",
+    // Vosges 16-piece truffle box, Dark Chocolate
+    vendorSku: "95742200-f2b9-4f0b-8bab-363ce23fe6e7",
+    vendorVariants: ["6d24590a-1675-4e0c-9e4c-921d538d9e67"],
     goodFor: ["valentines", "birthday", "christmas", "apology", "just_because"],
     tags: ["chocolate", "truffles", "dark chocolate", "sweets"],
     allergens: ["dairy", "soy", "nuts"],
@@ -233,6 +247,9 @@ const BASE_PRODUCTS: Product[] = [
     category: "bakery",
     priceCents: 5200,
     emoji: "🍪",
+    // Cravory two-dozen assortment, Birthday Box
+    vendorSku: "aaee944f-a9d9-44b6-8c01-334852f4c21f",
+    vendorVariants: ["5e8d5317-69e7-4ee6-bffd-6bc67d377430"],
     goodFor: ["birthday", "christmas", "just_because"],
     tags: ["cookies", "baked", "sweets", "shareable"],
     allergens: ["dairy", "gluten", "eggs", "nuts"],
@@ -247,6 +264,8 @@ const BASE_PRODUCTS: Product[] = [
     category: "bakery",
     priceCents: 9500,
     emoji: "🎂",
+    // Caroline's Cakes specialty signature
+    vendorSku: "d8a8ee73-fbb1-483b-aedd-d493507453f5",
     goodFor: ["birthday", "anniversary"],
     tags: ["cake", "birthday", "sweets", "shareable"],
     allergens: ["dairy", "gluten", "eggs"],
@@ -290,6 +309,8 @@ const BASE_PRODUCTS: Product[] = [
     category: "spa",
     priceCents: 8400,
     emoji: "🛁",
+    // Oak Essentials Ritual Oil
+    vendorSku: "8977a8c0-cf24-43be-9be0-b26095a6e9a4",
     imageUrl: "/products/spa_ritual_box.jpg",
     goodFor: ["birthday", "mothers_day", "just_because", "apology"],
     tags: ["spa", "self care", "bath", "relaxing", "lavender"],
@@ -319,6 +340,8 @@ const BASE_PRODUCTS: Product[] = [
     category: "spa",
     priceCents: 18500,
     emoji: "🧣",
+    // Quince Mongolian cashmere throw
+    vendorSku: "1f1d47b7-9179-450e-a2ce-41dedb193cb3",
     goodFor: ["christmas", "birthday", "anniversary"],
     tags: ["cozy", "cashmere", "warm", "travel", "luxury"],
     allergens: [],

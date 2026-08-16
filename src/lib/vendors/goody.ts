@@ -62,12 +62,58 @@ export function isCommerceKey(key = env.goodyApiKey ?? ""): boolean {
  */
 type GoodyProduct = {
   name?: string;
+  variants_label?: string | null;
   variants_num_selectable?: number | null;
+  variants?: { id?: string; name?: string }[];
   restricted_states?: string[];
   cart_eligible?: boolean;
   price_is_variable?: boolean;
   status?: string;
 };
+
+/**
+ * Which variant ids to send, or a reason we cannot choose.
+ *
+ * Their "variants" are a flavour, a colour, a style — a curation decision, not
+ * something to guess per order. So the catalogue records our choice and this
+ * honours it. Two cases still resolve themselves: a product with no variants
+ * needs none, and one offering exactly the required number has made the choice
+ * for us. Anything else is a genuine gap in our own catalogue data, and saying
+ * so is more useful than silently sending a flavour nobody picked.
+ */
+export function resolveVariants(
+  product: GoodyProduct,
+  chosen: string[] | undefined,
+  displayName: string,
+): { ids: string[] } | { error: string } {
+  const needed = product.variants_num_selectable ?? 0;
+  if (needed <= 0) return { ids: [] };
+
+  const available = (product.variants ?? []).filter((v) => v.id);
+
+  if (chosen?.length) {
+    const known = new Set(available.map((v) => v.id));
+    const stale = chosen.filter((id) => !known.has(id));
+    if (stale.length) {
+      return {
+        error: `Our chosen ${product.variants_label?.toLowerCase() ?? "option"} for ${displayName} is no longer offered by Goody.`,
+      };
+    }
+    if (chosen.length !== needed) {
+      return {
+        error: `${displayName} needs ${needed} ${product.variants_label?.toLowerCase() ?? "option"}(s) chosen and we have recorded ${chosen.length}.`,
+      };
+    }
+    return { ids: chosen };
+  }
+
+  // Nothing recorded, but no decision to make either.
+  if (available.length === needed) return { ids: available.map((v) => v.id as string) };
+
+  return {
+    error: `${displayName} needs a ${product.variants_label?.toLowerCase() ?? "option"} chosen and our catalogue does not record one.`,
+  };
+}
 
 type OrderBatchResponse = {
   id?: string;
@@ -184,11 +230,6 @@ export function rejectionReason(
   if (product.cart_eligible === false) {
     return `${displayName} cannot be sent directly — Goody only offers it through a gift link.`;
   }
-  // Direct send has to name a variant, and we hold no variant preference for
-  // her, so guessing one would be picking a colour on her behalf.
-  if ((product.variants_num_selectable ?? 0) > 0) {
-    return `${displayName} needs a size or colour chosen, which we do not hold for her.`;
-  }
   if (product.price_is_variable) {
     return `${displayName} has no fixed price, so we cannot commit to it in advance.`;
   }
@@ -208,6 +249,7 @@ export function rejectionReason(
 export function orderBatchBody(
   { mission, product, recipient, address, buyer }: OrderRequest,
   cardId: string | null = null,
+  variantIds: string[] = [],
 ) {
   const [first, ...rest] = recipient.name.trim().split(/\s+/);
   const message = mission.gift_message.trim();
@@ -241,7 +283,13 @@ export function orderBatchBody(
       },
     ],
     cart: {
-      items: [{ product_id: product.vendorSku, quantity: 1 }],
+      items: [
+        {
+          product_id: product.vendorSku,
+          quantity: 1,
+          ...(variantIds.length ? { variants: variantIds } : {}),
+        },
+      ],
     },
   };
 }
@@ -279,12 +327,15 @@ export const goodyAdapter: FulfillmentAdapter = {
       const refusal = rejectionReason(goodyProduct, address.state, product.name);
       if (refusal) return { ok: false, reason: refusal };
 
+      const variants = resolveVariants(goodyProduct, product.vendorVariants, product.name);
+      if ("error" in variants) return { ok: false, reason: variants.error };
+
       // Only worth fetching when there is actually a note to carry.
       const cardId = mission.gift_message.trim() ? await resolveCardId() : null;
 
       const result = await call<OrderBatchResponse>(
         "/order_batches",
-        orderBatchBody(request, cardId),
+        orderBatchBody(request, cardId, variants.ids),
       );
 
       const batchStatus = result.send_status ?? "";
