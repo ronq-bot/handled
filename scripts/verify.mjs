@@ -519,7 +519,7 @@ check("the coverage map accounts for every product exactly once", () => {
 
 check("every partner marked automated has an adapter behind it", () => {
   const live = COVERAGE.filter((c) => c.readiness === "live").map((c) => c.partner).sort();
-  assert.deepEqual(live, ["Florist One", "Giftbit", "Goody", "Goody"]);
+  assert.deepEqual(live, ["Florist One", "Giftbit", "Goody", "Goody", "Goody"]);
 });
 
 check("nothing claims to be dispatching without credentials", () => {

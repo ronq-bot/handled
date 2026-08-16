@@ -5,7 +5,7 @@ import { useTransition } from "react";
 import type { Address } from "@/lib/types";
 import { formatTime } from "@/lib/date";
 
-const BUDGETS = [50, 80, 120, 200, 350];
+const BUDGETS = [50, 80, 120, 200, 350, 500];
 
 /**
  * Address / budget / mode live in the URL so the ranked list stays a server
