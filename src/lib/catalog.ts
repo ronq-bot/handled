@@ -113,12 +113,17 @@ export type Product = {
   /** The partner's own catalogue code, when we have a live integration. */
   vendorSku?: string;
   /**
-   * What the partner charges us, in cents. Recorded next to what we charge so
-   * the margin is auditable rather than folklore — a test asserts we never
-   * list below cost, which is the mistake a hurried price edit actually makes.
-   * Absent where no live partner fulfils the product yet.
+   * What one gift genuinely costs us to land on her doorstep, in cents:
+   * the product, plus shipping, plus the supplier's processing fee, plus
+   * worst-case sales tax. Quoted live from the supplier rather than assumed,
+   * because shipping is per-product and ranged from nothing to twenty-five
+   * dollars across six items — pricing off the product line alone put every
+   * one of them under water.
+   *
+   * Any revenue share we negotiate lands on top of the margin below, so
+   * treating it as zero here keeps the floor honest.
    */
-  vendorCostCents?: number;
+  landedCostCents?: number;
   /**
    * The variant we have chosen from the partner's options — a flavour, a
    * colour, a style. Some partners will not ship without one, and the choice
@@ -190,11 +195,11 @@ const BASE_PRODUCTS: Product[] = [
     name: "Potted White Orchid",
     blurb: "Lives for months. Quietly implies you plan ahead.",
     category: "plant",
-    priceCents: 6400,
+    priceCents: 8600,
     emoji: "🪴",
     // Lively Root white phalaenopsis
     vendorSku: "6cf449a8-006b-42cf-bb35-9d66d4baeaba",
-    vendorCostCents: 5800,
+    landedCostCents: 7739,
     goodFor: ["birthday", "just_because", "mothers_day"],
     tags: ["plant", "orchid", "long-lasting", "minimal"],
     allergens: [],
@@ -236,11 +241,11 @@ const BASE_PRODUCTS: Product[] = [
     name: "24-Piece Truffle Collection",
     blurb: "Single-origin, in a box that looks more expensive than it was.",
     category: "chocolate",
-    priceCents: 6400,
+    priceCents: 10600,
     emoji: "🍬",
     // Vosges 16-piece truffle box, Dark Chocolate
     vendorSku: "95742200-f2b9-4f0b-8bab-363ce23fe6e7",
-    vendorCostCents: 5800,
+    landedCostCents: 9587,
     vendorVariants: ["6d24590a-1675-4e0c-9e4c-921d538d9e67"],
     goodFor: ["valentines", "birthday", "christmas", "apology", "just_because"],
     tags: ["chocolate", "truffles", "dark chocolate", "sweets"],
@@ -254,11 +259,11 @@ const BASE_PRODUCTS: Product[] = [
     name: "Bakery Cookie Tin",
     blurb: "Warm-adjacent cookies in a tin she'll keep buttons in for a decade.",
     category: "bakery",
-    priceCents: 5500,
+    priceCents: 6400,
     emoji: "🍪",
     // Cravory two-dozen assortment, Birthday Box
     vendorSku: "aaee944f-a9d9-44b6-8c01-334852f4c21f",
-    vendorCostCents: 5000,
+    landedCostCents: 5775,
     vendorVariants: ["5e8d5317-69e7-4ee6-bffd-6bc67d377430"],
     goodFor: ["birthday", "christmas", "just_because"],
     tags: ["cookies", "baked", "sweets", "shareable"],
@@ -272,11 +277,11 @@ const BASE_PRODUCTS: Product[] = [
     name: "Six-Layer Celebration Cake",
     blurb: "Arrives cold, thaws to unreasonable. Feeds a small department.",
     category: "bakery",
-    priceCents: 9400,
+    priceCents: 12800,
     emoji: "🎂",
     // Caroline's Cakes specialty signature
     vendorSku: "d8a8ee73-fbb1-483b-aedd-d493507453f5",
-    vendorCostCents: 8500,
+    landedCostCents: 11550,
     goodFor: ["birthday", "anniversary"],
     tags: ["cake", "birthday", "sweets", "shareable"],
     allergens: ["dairy", "gluten", "eggs"],
@@ -318,11 +323,11 @@ const BASE_PRODUCTS: Product[] = [
     name: "Spa Ritual Box",
     blurb: "Bath soak, body oil, the good salt. Doubles as a hint to take a night off.",
     category: "spa",
-    priceCents: 9700,
+    priceCents: 11200,
     emoji: "🛁",
     // Oak Essentials Ritual Oil
     vendorSku: "8977a8c0-cf24-43be-9be0-b26095a6e9a4",
-    vendorCostCents: 8800,
+    landedCostCents: 10164,
     imageUrl: "/products/spa_ritual_box.jpg",
     goodFor: ["birthday", "mothers_day", "just_because", "apology"],
     tags: ["spa", "self care", "bath", "relaxing", "lavender"],
@@ -350,11 +355,11 @@ const BASE_PRODUCTS: Product[] = [
     name: "Cashmere Travel Wrap",
     blurb: "The blanket that gets stolen from the couch and never returned.",
     category: "spa",
-    priceCents: 16500,
+    priceCents: 19100,
     emoji: "🧣",
     // Quince Mongolian cashmere throw
     vendorSku: "1f1d47b7-9179-450e-a2ce-41dedb193cb3",
-    vendorCostCents: 15000,
+    landedCostCents: 17325,
     goodFor: ["christmas", "birthday", "anniversary"],
     tags: ["cozy", "cashmere", "warm", "travel", "luxury"],
     allergens: [],
