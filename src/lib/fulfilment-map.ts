@@ -97,6 +97,16 @@ export const COVERAGE: Coverage[] = [
     gap: "None in code. Shares a supplier with Cocoa Line. Recipients may swap a gift, so the category is certain but the exact item is not.",
   },
   {
+    vendorId: "gilt_grace",
+    categories: ["jewelry"],
+    partner: "Goody",
+    url: "https://developer.ongoody.com/",
+    readiness: "live",
+    dateGuarantee:
+      "Posted on the day, not promised for one — parcel carrier from there, which the lead time already models.",
+    gap: "None in code. Shares a supplier with Cocoa Line and Hearthside; jewelry ships free of carriage charges.",
+  },
+  {
     vendorId: "cellar_seven",
     categories: ["wine"],
     partner: "No public API",
@@ -133,6 +143,7 @@ const CREDENTIAL_CHECKS: Record<string, () => boolean> = {
   moment_co: giftbitIsLive,
   cocoa_line: goodyIsLive,
   hearthside: goodyIsLive,
+  gilt_grace: goodyIsLive,
 };
 
 /** Adds the runtime truth — whether credentials are actually present. */

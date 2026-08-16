@@ -519,7 +519,7 @@ check("the coverage map accounts for every product exactly once", () => {
 
 check("every partner marked automated has an adapter behind it", () => {
   const live = COVERAGE.filter((c) => c.readiness === "live").map((c) => c.partner).sort();
-  assert.deepEqual(live, ["Florist One", "Giftbit", "Goody", "Goody"]);
+  assert.deepEqual(live, ["Florist One", "Giftbit", "Goody", "Goody", "Goody"]);
 });
 
 check("nothing claims to be dispatching without credentials", () => {
@@ -552,16 +552,16 @@ check("every automated partner has a credential check wired to it", () => {
   }
 });
 
-check("we never list a gift below what the supplier charges us", () => {
+check("we never list a gift below what it costs us to land", () => {
   // The mistake a hurried price edit makes is selling at a loss quietly.
-  const priced = ALL_PRODUCTS.filter((p) => p.vendorCostCents);
+  const priced = ALL_PRODUCTS.filter((p) => p.landedCostCents);
   assert.ok(priced.length > 0, "expected at least one product with a recorded cost");
   for (const p of priced) {
     assert.ok(
-      p.priceCents >= p.vendorCostCents,
-      `${p.name} lists at ${p.priceCents} but costs ${p.vendorCostCents}`,
+      p.priceCents >= p.landedCostCents,
+      `${p.name} lists at ${p.priceCents} but costs ${p.landedCostCents} to land`,
     );
-    const margin = (p.priceCents - p.vendorCostCents) / p.vendorCostCents;
+    const margin = (p.priceCents - p.landedCostCents) / p.landedCostCents;
     assert.ok(
       margin >= 0.05 && margin <= 0.2,
       `${p.name} margin is ${(margin * 100).toFixed(1)}%, outside the intended ~10%`,

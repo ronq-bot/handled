@@ -81,6 +81,11 @@ const LIVE_VENDORS: Record<string, () => Promise<FulfillmentAdapter | null>> = {
     const { goodyAdapter, goodyIsLive } = await import("./vendors/goody");
     return goodyIsLive() ? goodyAdapter : null;
   },
+  // Gilt & Grace is our jewelry and accessories slot; same supplier again.
+  gilt_grace: async () => {
+    const { goodyAdapter, goodyIsLive } = await import("./vendors/goody");
+    return goodyIsLive() ? goodyAdapter : null;
+  },
 };
 
 export async function adapterFor(vendorId: string): Promise<FulfillmentAdapter> {
