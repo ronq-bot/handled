@@ -71,6 +71,16 @@ const LIVE_VENDORS: Record<string, () => Promise<FulfillmentAdapter | null>> = {
     const { giftbitAdapter, giftbitIsLive } = await import("./vendors/giftbit");
     return giftbitIsLive() ? giftbitAdapter : null;
   },
+  // Goody's curated catalogue covers two of our slots — confectionery and
+  // bakery under Cocoa Line, spa and home under Hearthside.
+  cocoa_line: async () => {
+    const { goodyAdapter, goodyIsLive } = await import("./vendors/goody");
+    return goodyIsLive() ? goodyAdapter : null;
+  },
+  hearthside: async () => {
+    const { goodyAdapter, goodyIsLive } = await import("./vendors/goody");
+    return goodyIsLive() ? goodyAdapter : null;
+  },
 };
 
 export async function adapterFor(vendorId: string): Promise<FulfillmentAdapter> {
