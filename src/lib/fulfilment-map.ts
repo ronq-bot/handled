@@ -110,11 +110,11 @@ export const COVERAGE: Coverage[] = [
     vendorId: "cellar_seven",
     categories: ["wine"],
     partner: "No public API",
-    url: "https://www.floristone.com/api/",
+    url: "https://www.giftbasketsoverseas.com/gift-delivery-api",
     readiness: "manual",
     dateGuarantee:
       "None. Alcohol is state-regulated, needs an adult signature, and cannot go to most offices.",
-    gap: "No self-serve wine API we could verify. Realistically a concierge task, or dropped from the catalogue until a supplier is signed.",
+    gap: "No self-serve wine API we could verify. Nearest route is Gift Baskets Overseas' application-gated API, which lists wine. Until then a concierge task, or dropped from the catalogue.",
   },
 ];
 

@@ -12,7 +12,16 @@ export const dynamic = "force-dynamic";
  * lets you fast-forward the calendar in development.
  */
 export async function GET(request: Request) {
+  // In production the secret is mandatory: this route sits outside the
+  // coming-soon gate (the cron must keep running behind it), so without a
+  // secret it would be the one publicly reachable endpoint.
   const secret = process.env.HANDLED_CRON_SECRET;
+  if (!secret && process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "HANDLED_CRON_SECRET is not set — refusing to run the dispatcher unauthenticated." },
+      { status: 503 },
+    );
+  }
   if (secret) {
     const auth = request.headers.get("authorization");
     if (auth !== `Bearer ${secret}`) {
