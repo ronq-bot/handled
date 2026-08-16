@@ -60,6 +60,7 @@ nothing else changes. **Account → Connected services** shows live status.
 | `FLORIST_ONE_API_USER` + `_PASSWORD` | Flowers ordered from real florists against confirmed delivery dates | floristone.com/api |
 | `GIFTBIT_API_KEY` | An experience credit is emailed to *him* on the day — never to her, so the surprise holds | testbedapp.giftbit.com — self-serve sandbox |
 | `GOODY_API_KEY` | Confectionery, bakery, spa and home gifts posted to her address | developer.ongoody.com — self-serve key, free sandbox |
+| `PRINTFUL_API_KEY` | Engraved and printed-to-order gifts produced and shipped to her | printful.com → Settings → API — self-serve token. Orders stay drafts until `PRINTFUL_ENV=production`; each product needs its store's sync variant id in `vendorSku` |
 | `HANDLED_CRON_SECRET` | `/api/cron/dispatch` requires `Authorization: Bearer …` | any random string — set it before you deploy |
 
 Goody issues two kinds of key and the adapter reads which from the prefix, so
