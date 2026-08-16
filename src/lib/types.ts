@@ -94,6 +94,8 @@ export type Mission = {
   failure_reason: string;
   charge_ref: string;
   vendor_payload: string;
+  /** Partner commission earned on this order, captured at placement time. */
+  affiliate_cents: number;
   created_at: string;
   updated_at: string;
 };

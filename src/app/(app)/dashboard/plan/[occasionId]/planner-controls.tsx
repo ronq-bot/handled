@@ -1,36 +1,47 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
+import { useRef, useTransition } from "react";
 import type { Address } from "@/lib/types";
 import { formatTime } from "@/lib/date";
 
 const BUDGETS = [50, 80, 120, 200, 350, 500];
 
 /**
- * Address / budget / mode live in the URL so the ranked list stays a server
- * render. This component only pushes query params — it never holds gift state.
+ * Address / budget / mode / search live in the URL so the ranked list stays a
+ * server render. This component only pushes query params — it never holds
+ * gift state.
  */
 export function PlannerControls({
   addresses,
   addressId,
   budget,
   mode,
+  query,
 }: {
   addresses: Address[];
   addressId: string;
   budget: number;
   mode: "auto" | "manual";
+  query: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function set(key: string, value: string) {
     const next = new URLSearchParams(searchParams.toString());
-    next.set(key, value);
+    if (value) next.set(key, value);
+    else next.delete(key);
     startTransition(() => router.replace(`${pathname}?${next.toString()}`, { scroll: false }));
+  }
+
+  /** The search re-renders the grid on the server; don't do it per keystroke. */
+  function setSearch(value: string) {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => set("q", value), 300);
   }
 
   return (
@@ -114,6 +125,22 @@ export function PlannerControls({
             </button>
           ))}
         </div>
+
+        {mode === "manual" && (
+          <div className="mt-5">
+            <label className="label" htmlFor="gift-search">
+              Search the catalogue
+            </label>
+            <input
+              id="gift-search"
+              type="search"
+              className="field"
+              placeholder="chocolate, jewelry, spa, something engraved…"
+              defaultValue={query}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

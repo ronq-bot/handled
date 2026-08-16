@@ -10,7 +10,9 @@
     "verify": "node scripts/verify.mjs",
     "dispatch": "curl -s http://localhost:3000/api/cron/dispatch",
     "verify:both": "./scripts/verify-both.sh",
-    "sync:catalogue": "node scripts/sync-catalogue.mjs"
+    "sync:catalogue": "node scripts/sync-catalogue.mjs",
+    "margins": "node scripts/show-margins.mjs",
+    "earnings": "node scripts/show-earnings.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.1",

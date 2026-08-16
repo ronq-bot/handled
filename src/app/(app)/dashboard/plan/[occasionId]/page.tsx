@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getOccasion, getRecipient, listAddresses, recentProductIds } from "@/lib/queries";
-import { rankGifts } from "@/lib/picker";
+import { browseGifts, rankGifts } from "@/lib/picker";
 import { planDelivery } from "@/lib/scheduling";
 import { formatMoney, getVendor, OCCASION_LABELS, CATEGORY_LABELS } from "@/lib/catalog";
 import { countdown, formatLong, formatShort, nextAnniversary, today } from "@/lib/date";
@@ -18,7 +18,7 @@ export default async function PlanPage({
   searchParams,
 }: {
   params: Promise<{ occasionId: string }>;
-  searchParams: Promise<{ address?: string; budget?: string; mode?: string }>;
+  searchParams: Promise<{ address?: string; budget?: string; mode?: string; q?: string }>;
 }) {
   const { occasionId } = await params;
   const query = await searchParams;
@@ -36,26 +36,37 @@ export default async function PlanPage({
   const address = addresses.find((a) => a.id === query.address) ?? addresses[0];
   const budget = clampBudget(Number(query.budget) || 120);
   const mode = query.mode === "manual" ? "manual" : "auto";
+  const search = (query.q ?? "").trim();
 
   const eventDate = occasion.recurring
     ? nextAnniversary(occasion.event_date, today())
     : occasion.event_date;
 
-  const ranked = rankGifts({
+  const pickInput = {
     recipient,
     address,
     occasionKind: occasion.kind,
     budgetCents: budget * 100,
     recentProductIds: await recentProductIds(user.id, recipient.id),
-  });
+  };
+  const ranked = rankGifts(pickInput);
 
   const withPlans = ranked.map((r) => ({
     ...r,
     plan: planDelivery(eventDate, r.product, address),
   }));
   const deliverable = withPlans.filter((r) => !r.plan.tooLate && !r.plan.tooFar);
-  const missed = withPlans.filter((r) => r.plan.tooLate);
   const top = deliverable[0];
+
+  // Manual mode browses the whole catalogue, cautions spelled out rather than
+  // options hidden — he is choosing with his own eyes, so he may pick anything
+  // that can physically make the date.
+  const catalogue = browseGifts(pickInput, search).map((r) => ({
+    ...r,
+    plan: planDelivery(eventDate, r.product, address),
+  }));
+  const choosable = catalogue.filter((r) => !r.plan.tooLate && !r.plan.tooFar);
+  const outOfTime = catalogue.filter((r) => r.plan.tooLate);
 
   // Every product shares the same date, so this is a fact about the occasion
   // rather than about any one gift — say it once, at the top.
@@ -74,7 +85,13 @@ export default async function PlanPage({
         </p>
       </div>
 
-      <PlannerControls addresses={addresses} addressId={address.id} budget={budget} mode={mode} />
+      <PlannerControls
+        addresses={addresses}
+        addressId={address.id}
+        budget={budget}
+        mode={mode}
+        query={search}
+      />
 
       {beyondHorizon && (
         <div className="card border-brass/40 bg-brass-tint p-4 text-sm">
@@ -158,15 +175,25 @@ export default async function PlanPage({
         ) : (
           <section>
             <h2 className="text-xl font-bold">
-              {deliverable.length} gift{deliverable.length === 1 ? "" : "s"} that can make this date
+              {search
+                ? `${choosable.length} gift${choosable.length === 1 ? "" : "s"} matching “${search}”`
+                : `The whole catalogue — ${choosable.length} gifts that can make this date`}
             </h2>
             <p className="mt-1 text-sm text-muted">
-              Within your ${budget} ceiling, safe for {address.kind === "work" ? "an office" : "a home"}{" "}
-              delivery, and clear of anything {recipient.name} is allergic to or has vetoed.
+              Pick anything. Auto-Pilot&apos;s matches lead; where it would object — her allergies,
+              her vetoes, your ${budget} ceiling — the objection is written on the card, and the
+              choice stays yours.
             </p>
 
+            {choosable.length === 0 && (
+              <div className="card mt-5 p-6 text-sm text-muted">
+                Nothing matches {search ? `“${search}”` : "that"}. Try another word — a category
+                like chocolate or jewelry, or a mood like cozy or keepsake.
+              </div>
+            )}
+
             <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {deliverable.map((r, i) => (
+              {choosable.map((r, i) => (
                 <label key={r.product.id} className="group cursor-pointer">
                   <input
                     type="radio"
@@ -183,7 +210,7 @@ export default async function PlanPage({
                         {formatMoney(r.product.priceCents)}
                       </span>
                     </div>
-                    {i === 0 && (
+                    {i === 0 && r.cautions.length === 0 && (
                       <span className="tag mt-3 border-forest/40 bg-forest-tint text-forest">
                         Best match
                       </span>
@@ -199,18 +226,23 @@ export default async function PlanPage({
                     {r.warnings.length > 0 && (
                       <p className="mt-3 text-xs text-brass-deep">! {r.warnings[0]}</p>
                     )}
+                    {r.cautions.map((c) => (
+                      <p key={c} className="mt-3 text-xs font-medium text-claret">
+                        ⚠ {c}
+                      </p>
+                    ))}
                   </div>
                 </label>
               ))}
             </div>
 
-            {missed.length > 0 && (
+            {outOfTime.length > 0 && (
               <details className="mt-6">
                 <summary className="cursor-pointer text-sm text-muted hover:text-ink">
-                  {missed.length} more that can&apos;t make it in time
+                  {outOfTime.length} more that can&apos;t make it in time
                 </summary>
                 <ul className="mt-3 space-y-1.5 text-sm text-muted">
-                  {missed.map((r) => (
+                  {outOfTime.map((r) => (
                     <li key={r.product.id}>
                       <span className="text-ink">{r.product.name}</span> — {r.plan.lateReason}
                     </li>

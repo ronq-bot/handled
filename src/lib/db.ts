@@ -144,6 +144,11 @@ const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
   // than a mission because the nudge is about the account running out of
   // cover, not about any one gift.
   ["users", "renewal_nudged_at", "TEXT NOT NULL DEFAULT ''"],
+  // What the partner pays us back for this order, captured at placement time
+  // because commission rates move and the ledger should say what was earned,
+  // not what today's rate would have earned. Operator-facing only — this
+  // number must never reach a customer-visible page.
+  ["missions", "affiliate_cents", "INTEGER NOT NULL DEFAULT 0"],
 ];
 
 /* ── SQLite ─────────────────────────────────────────────────────── */

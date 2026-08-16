@@ -1,4 +1,4 @@
-import { VENDORS, PRODUCTS, type ProductCategory } from "./catalog";
+import { VENDORS, PRODUCTS, type Product, type ProductCategory } from "./catalog";
 import { floristOneIsLive } from "./vendors/florist-one";
 import { giftbitIsLive } from "./vendors/giftbit";
 import { goodyIsLive } from "./vendors/goody";
@@ -34,11 +34,22 @@ export type Coverage = {
   dateGuarantee: string;
   /** Honest note on what stands between us and shipping this automatically. */
   gap: string;
+  /**
+   * What the partner pays us back on each order, as a percentage of the
+   * product's list price. This is the affiliate/commission side of the
+   * business: separate from the cost-plus margin (`landedCostCents`), and
+   * zero for wholesale partners like Printful where the entire take is
+   * already in the margin. Recorded on the mission at placement time —
+   * rates move, and last year's orders earned last year's rate.
+   * Illustrative figures in this build, like the partner list itself.
+   */
+  affiliateRatePct: number;
 };
 
 export const COVERAGE: Coverage[] = [
   {
     vendorId: "petal_post",
+    affiliateRatePct: 20,
     categories: ["flowers"],
     partner: "Florist One",
     url: "https://www.floristone.com/api/",
@@ -49,6 +60,7 @@ export const COVERAGE: Coverage[] = [
   },
   {
     vendorId: "moment_co",
+    affiliateRatePct: 3,
     categories: ["experience"],
     partner: "Giftbit",
     url: "https://www.giftbit.com/developers/",
@@ -59,6 +71,7 @@ export const COVERAGE: Coverage[] = [
   },
   {
     vendorId: "atelier_ink",
+    affiliateRatePct: 0,
     categories: ["personalized"],
     partner: "Printful",
     url: "https://developers.printful.com/docs/",
@@ -69,6 +82,7 @@ export const COVERAGE: Coverage[] = [
   },
   {
     vendorId: "orchard_club",
+    affiliateRatePct: 12,
     categories: ["fruit"],
     partner: "Gift Baskets Overseas",
     url: "https://www.giftbasketsoverseas.com/gift-delivery-api",
@@ -79,6 +93,7 @@ export const COVERAGE: Coverage[] = [
   },
   {
     vendorId: "cocoa_line",
+    affiliateRatePct: 15,
     categories: ["chocolate", "bakery"],
     partner: "Goody",
     url: "https://developer.ongoody.com/",
@@ -89,6 +104,7 @@ export const COVERAGE: Coverage[] = [
   },
   {
     vendorId: "hearthside",
+    affiliateRatePct: 15,
     categories: ["spa", "plant"],
     partner: "Goody",
     url: "https://developer.ongoody.com/",
@@ -99,6 +115,7 @@ export const COVERAGE: Coverage[] = [
   },
   {
     vendorId: "gilt_grace",
+    affiliateRatePct: 15,
     categories: ["jewelry"],
     partner: "Goody",
     url: "https://developer.ongoody.com/",
@@ -109,6 +126,7 @@ export const COVERAGE: Coverage[] = [
   },
   {
     vendorId: "cellar_seven",
+    affiliateRatePct: 0,
     categories: ["wine"],
     partner: "No public API",
     url: "https://www.giftbasketsoverseas.com/gift-delivery-api",
@@ -147,6 +165,17 @@ const CREDENTIAL_CHECKS: Record<string, () => boolean> = {
   gilt_grace: goodyIsLive,
   atelier_ink: printfulIsLive,
 };
+
+/**
+ * What we earn back from the partner when this product ships, in cents.
+ * Zero is a real answer: wholesale partners pay nothing back because the
+ * whole take is already in the cost-plus margin.
+ */
+export function affiliateCentsFor(product: Pick<Product, "vendorId" | "priceCents">): number {
+  const entry = COVERAGE.find((c) => c.vendorId === product.vendorId);
+  if (!entry) return 0;
+  return Math.round((product.priceCents * entry.affiliateRatePct) / 100);
+}
 
 /** Adds the runtime truth — whether credentials are actually present. */
 export function coverageWithStatus() {
