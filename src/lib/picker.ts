@@ -110,3 +110,66 @@ export function rankGifts(input: PickInput): GiftPick[] {
 export function autoPick(input: PickInput): GiftPick | null {
   return rankGifts(input)[0] ?? null;
 }
+
+export type CatalogueEntry = GiftPick & {
+  /**
+   * Why Auto-Pilot would not choose this one. Empty for anything rankGifts
+   * would rank. Browsing is different from delegating: when he is choosing
+   * with his own eyes we say what we know and let him decide, rather than
+   * silently hiding half the catalogue.
+   */
+  cautions: string[];
+};
+
+/**
+ * The whole catalogue for one gift slot, searchable. Products the hard rules
+ * would eliminate are returned with their objections spelled out instead of
+ * being dropped — Auto-Pilot's picks first, in its order, then the rest.
+ */
+export function browseGifts(input: PickInput, query = ""): CatalogueEntry[] {
+  const { recipient, address, budgetCents } = input;
+  const dislikes = words(recipient.dislikes);
+  const allergies = words(recipient.allergies);
+
+  const ranked = new Map(rankGifts(input).map((r, order) => [r.product.id, { ...r, order }]));
+
+  const q = query.trim().toLowerCase();
+  const hit = (p: Product) =>
+    !q ||
+    [p.name, p.blurb, p.category, ...p.tags].some((text) => text.toLowerCase().includes(q));
+
+  const entries = PRODUCTS.filter(hit).map((product) => {
+    const scored = ranked.get(product.id);
+    if (scored) return { ...scored, cautions: [] };
+
+    const cautions: string[] = [];
+    const allergyHit = product.allergens.find((a) => matches(a, allergies));
+    if (allergyHit) {
+      cautions.push(`She has listed a ${allergyHit} allergy, and this contains it.`);
+    }
+    const dislikeHit = [...product.tags, product.category].find((t) => matches(t, dislikes));
+    if (dislikeHit) cautions.push(`She has said no to ${dislikeHit}.`);
+    if (address.kind === "work" && !product.workFriendly) {
+      cautions.push("Not one for the office front desk — send it to her home instead.");
+    }
+    if (product.priceCents > budgetCents) {
+      cautions.push(`Over your $${Math.round(budgetCents / 100)} ceiling.`);
+    }
+
+    return { product, score: 0, reasons: [], warnings: [], cautions, order: Infinity };
+  });
+
+  entries.sort(
+    (a, b) =>
+      a.order - b.order ||
+      a.cautions.length - b.cautions.length ||
+      a.product.name.localeCompare(b.product.name),
+  );
+  return entries.map(({ product, score, reasons, warnings, cautions }) => ({
+    product,
+    score,
+    reasons,
+    warnings,
+    cautions,
+  }));
+}

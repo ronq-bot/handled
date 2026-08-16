@@ -2,6 +2,7 @@ import "server-only";
 import { getDb, nowIso } from "./db";
 import { getProduct, type Product } from "./catalog";
 import { adapterFor } from "./fulfillment";
+import { affiliateCentsFor } from "./fulfilment-map";
 import { chargeForMission, userCanBeCharged } from "./payments";
 import {
   emailDelivered,
@@ -146,9 +147,16 @@ export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchRepo
     await db.run(
       `UPDATE missions
        SET status = 'placed', vendor_id = ?, vendor_order_ref = ?, price_cents = ?,
-           failure_reason = '', updated_at = ?
+           affiliate_cents = ?, failure_reason = '', updated_at = ?
        WHERE id = ?`,
-      [product.vendorId, result.vendorOrderRef, result.priceCents, nowIso(), mission.id],
+      [
+        product.vendorId,
+        result.vendorOrderRef,
+        result.priceCents,
+        affiliateCentsFor(product),
+        nowIso(),
+        mission.id,
+      ],
     );
     await logMissionEvent(
       mission.id,

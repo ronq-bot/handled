@@ -20,7 +20,8 @@ const { addDays, nextAnniversary, previousBusinessDay, daysBetween } = await imp
   "../src/lib/date.ts"
 );
 const { planDelivery, dogHouseRisk, isFeasible, MAX_SCHEDULE_DAYS } = await import("../src/lib/scheduling.ts");
-const { autoPick, rankGifts } = await import("../src/lib/picker.ts");
+const { autoPick, browseGifts, rankGifts } = await import("../src/lib/picker.ts");
+const catalogForBrowse = await import("../src/lib/catalog.ts");
 const { getProduct } = await import("../src/lib/catalog.ts");
 
 let passed = 0;
@@ -214,6 +215,47 @@ check("an impossible budget returns null rather than a bad gift", () => {
   assert.equal(pick, null);
 });
 
+check("browsing shows the whole catalogue, objections written out instead of hidden", () => {
+  const input = { recipient: dana, address: homeAddress, occasionKind: "birthday", budgetCents: 12000 };
+  const { PRODUCTS } = catalogForBrowse;
+  const entries = browseGifts(input);
+  assert.equal(entries.length, PRODUCTS.length, "nothing may be silently dropped");
+
+  // Auto-Pilot's picks lead, in its own order, and carry no cautions.
+  const ranked = rankGifts(input);
+  assert.deepEqual(
+    entries.slice(0, ranked.length).map((e) => e.product.id),
+    ranked.map((r) => r.product.id),
+  );
+  assert.ok(entries.slice(0, ranked.length).every((e) => e.cautions.length === 0));
+
+  // A nut allergy no longer hides the product — it labels it.
+  const nutty = entries.find((e) => e.product.allergens.includes("nuts"));
+  assert.ok(nutty, "products with allergens must still appear");
+  assert.match(nutty.cautions.join(" "), /allergy/i);
+
+  // Over-budget items appear too, saying so.
+  const dear = entries.find((e) => e.product.priceCents > 12000);
+  assert.ok(dear, "over-budget products must still appear");
+  assert.match(dear.cautions.join(" "), /ceiling/i);
+});
+
+check("the catalogue search finds gifts by name, tag and category", () => {
+  const input = { recipient: dana, address: homeAddress, occasionKind: "birthday", budgetCents: 12000 };
+  const chocolate = browseGifts(input, "chocolate");
+  assert.ok(chocolate.length > 0);
+  assert.ok(
+    chocolate.every(
+      (e) =>
+        [e.product.name, e.product.blurb, e.product.category, ...e.product.tags]
+          .join(" ")
+          .toLowerCase()
+          .includes("chocolate"),
+    ),
+  );
+  assert.equal(browseGifts(input, "zzzz-no-such-gift").length, 0);
+});
+
 console.log("\nrisk scoring");
 
 check("everything covered and paid for scores clear", () => {
@@ -295,6 +337,21 @@ const status = async (id) => (await db.get(`SELECT status FROM missions WHERE id
   assert.equal(Number(events.n), 1);
   passed += 1;
   console.log("  ok  re-running the same day is idempotent");
+}
+
+{
+  const id = await seed();
+  await runDispatch("2026-08-18");
+  const row = await db.get(
+    `SELECT price_cents, affiliate_cents FROM missions WHERE id = ?`,
+    [id],
+  );
+  const { COVERAGE: cov } = await import("../src/lib/fulfilment-map.ts");
+  const rate = cov.find((c) => c.vendorId === "petal_post").affiliateRatePct;
+  assert.ok(rate > 0, "the flower partner pays a commission");
+  assert.equal(row.affiliate_cents, Math.round((row.price_cents * rate) / 100));
+  passed += 1;
+  console.log("  ok  the partner's commission is recorded the moment the order is placed");
 }
 
 {
@@ -502,7 +559,7 @@ check("conversion is stable across many parameters", () => {
 
 console.log("\nfulfilment coverage");
 
-const { COVERAGE, coverageWithStatus, coverageSummary } = await import("../src/lib/fulfilment-map.ts");
+const { COVERAGE, coverageWithStatus, coverageSummary, affiliateCentsFor } = await import("../src/lib/fulfilment-map.ts");
 const { PRODUCTS: ALL_PRODUCTS, VENDORS: ALL_VENDORS } = await import("../src/lib/catalog.ts");
 
 check("every catalogue vendor has a real-world partner mapped", () => {
@@ -589,6 +646,25 @@ check("every partner states a date guarantee and a gap", () => {
     assert.ok(c.gap.length > 20, `${c.partner} has no stated gap`);
     assert.match(c.url, /^https:\/\//);
   }
+});
+
+check("every partner states what it pays us back, and the arithmetic holds", () => {
+  for (const c of COVERAGE) {
+    assert.equal(typeof c.affiliateRatePct, "number", `${c.partner} has no affiliate rate`);
+    assert.ok(
+      c.affiliateRatePct >= 0 && c.affiliateRatePct <= 50,
+      `${c.partner}'s rate ${c.affiliateRatePct}% is outside anything a partner really pays`,
+    );
+  }
+  // 20% of $74.00 is $14.80, rounded to the cent.
+  const flowers = ALL_PRODUCTS.find((p) => p.vendorId === "petal_post");
+  const rate = COVERAGE.find((c) => c.vendorId === "petal_post").affiliateRatePct;
+  assert.equal(
+    affiliateCentsFor(flowers),
+    Math.round((flowers.priceCents * rate) / 100),
+  );
+  // A vendor we've never heard of earns nothing rather than crashing.
+  assert.equal(affiliateCentsFor({ vendorId: "nobody", priceCents: 10000 }), 0);
 });
 
 console.log("\nflorist one adapter — never book an unconfirmed date");
