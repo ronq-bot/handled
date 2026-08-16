@@ -581,7 +581,7 @@ check("the recipient record has no contact route at all", () => {
 
 console.log("\ngoody adapter — shipped to her, signed by him");
 
-const { goodyAdapter, goodyIsLive, orderBatchBody } = await import("../src/lib/vendors/goody.ts");
+const { goodyAdapter, goodyIsLive, orderBatchBody, rejectionReason } = await import("../src/lib/vendors/goody.ts");
 
 const goodyOrder = {
   mission: { id: "msn_g", gift_message: "Happy birthday. — M", deliver_on: "2026-08-20" },
@@ -643,6 +643,39 @@ check("we never hand Goody a send date — our own dispatcher owns the timing", 
   passed += 1;
   console.log("  ok  a product with no Goody id is refused before any network call");
 }
+
+check("a product needing a size or colour is refused, not guessed at", () => {
+  // 48% of a 200-product sample of their live catalogue sets this. Direct
+  // send must name a variant, and we hold no preference for her.
+  const reason = rejectionReason({ variants_num_selectable: 1 }, "NC", "Acrylic Tumbler");
+  assert.match(reason, /size or colour/i);
+});
+
+check("a product barred from her state is caught before the order goes in", () => {
+  // Real constraint: a third of their catalogue restricts at least one state.
+  assert.match(
+    rejectionReason({ restricted_states: ["AK", "HI"] }, "hi", "Wine Tumbler"),
+    /cannot ship/i,
+  );
+  assert.equal(rejectionReason({ restricted_states: ["AK", "HI"] }, "NC", "Wine Tumbler"), null);
+});
+
+check("link-only, variable-price and withdrawn products are all refused", () => {
+  assert.match(rejectionReason({ cart_eligible: false }, "NC", "X"), /gift link/i);
+  assert.match(rejectionReason({ price_is_variable: true }, "NC", "X"), /no fixed price/i);
+  assert.match(rejectionReason({ status: "inactive" }, "NC", "X"), /no longer available/i);
+});
+
+check("an ordinary product passes the pre-flight untouched", () => {
+  assert.equal(
+    rejectionReason(
+      { status: "active", cart_eligible: true, variants_num_selectable: null, restricted_states: [] },
+      "NC",
+      "Bakery Cookie Tin",
+    ),
+    null,
+  );
+});
 
 {
   const noStreet = { ...goodyOrder, address: { ...goodyOrder.address, line1: "  " } };

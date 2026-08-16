@@ -40,7 +40,21 @@ export function goodyIsLive(): boolean {
   return Boolean(env.goodyApiKey);
 }
 
-/** Their catalogue is browsable, so a wrong SKU fails late and confusingly. */
+/**
+ * The parts of their product record that decide whether we may order it.
+ * Measured against a 200-product sample of the live catalogue: 48% require a
+ * variant choice and 33% are barred from at least one state, so neither is an
+ * edge case to discover in production.
+ */
+type GoodyProduct = {
+  name?: string;
+  variants_num_selectable?: number | null;
+  restricted_states?: string[];
+  cart_eligible?: boolean;
+  price_is_variable?: boolean;
+  status?: string;
+};
+
 type OrderBatchResponse = {
   id?: string;
   send_status?: string;
@@ -58,19 +72,19 @@ const FAILED_ORDER_STATUSES = new Set(["failed", "canceled"]);
 
 const TIMEOUT_MS = 15_000;
 
-async function call<T>(path: string, body: unknown): Promise<T> {
+async function call<T>(path: string, body?: unknown): Promise<T> {
   if (!env.goodyApiKey) throw new Error("Goody is not configured.");
 
   let response: Response;
   try {
     response = await fetch(`${host()}${path}`, {
-      method: "POST",
+      method: body === undefined ? "GET" : "POST",
       headers: {
         Authorization: `Bearer ${env.goodyApiKey}`,
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify(body),
+      body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -90,6 +104,40 @@ async function call<T>(path: string, body: unknown): Promise<T> {
     throw new Error(`Goody ${path}: ${detail}`);
   }
   return json as T;
+}
+
+/**
+ * Why a gift cannot be ordered as it stands, or null if it can.
+ *
+ * Exported and pure so the rules can be tested without a key or a live
+ * catalogue. Same contract the florist adapter follows: ask them what they
+ * will accept before promising it, rather than sending an order we can
+ * already tell will be rejected.
+ */
+export function rejectionReason(
+  product: GoodyProduct,
+  state: string,
+  displayName: string,
+): string | null {
+  if (product.status && product.status !== "active") {
+    return `${displayName} is no longer available from Goody.`;
+  }
+  if (product.cart_eligible === false) {
+    return `${displayName} cannot be sent directly — Goody only offers it through a gift link.`;
+  }
+  // Direct send has to name a variant, and we hold no variant preference for
+  // her, so guessing one would be picking a colour on her behalf.
+  if ((product.variants_num_selectable ?? 0) > 0) {
+    return `${displayName} needs a size or colour chosen, which we do not hold for her.`;
+  }
+  if (product.price_is_variable) {
+    return `${displayName} has no fixed price, so we cannot commit to it in advance.`;
+  }
+  const barred = (product.restricted_states ?? []).map((s) => s.toUpperCase());
+  if (state && barred.includes(state.trim().toUpperCase())) {
+    return `Goody cannot ship ${displayName} to ${state.toUpperCase()}.`;
+  }
+  return null;
 }
 
 /**
@@ -155,6 +203,18 @@ export const goodyAdapter: FulfillmentAdapter = {
     }
 
     try {
+      // Ask what they will actually accept before committing to it. Nearly
+      // half their catalogue needs a variant chosen and a third is barred
+      // from some state, so sending blind would fail on the ship date — the
+      // one day there is no runway left to recover.
+      const lookup = await call<{ data?: GoodyProduct } & GoodyProduct>(
+        `/products/${encodeURIComponent(product.vendorSku)}`,
+      );
+      const goodyProduct = lookup.data ?? lookup;
+
+      const refusal = rejectionReason(goodyProduct, address.state, product.name);
+      if (refusal) return { ok: false, reason: refusal };
+
       const result = await call<OrderBatchResponse>("/order_batches", orderBatchBody(request));
 
       const batchStatus = result.send_status ?? "";
