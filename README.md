@@ -60,6 +60,7 @@ nothing else changes. **Account → Connected services** shows live status.
 | `FLORIST_ONE_API_USER` + `_PASSWORD` | Flowers ordered from real florists against confirmed delivery dates | floristone.com/api |
 | `GIFTBIT_API_KEY` | An experience credit is emailed to *him* on the day — never to her, so the surprise holds | testbedapp.giftbit.com — self-serve sandbox |
 | `GOODY_API_KEY` | Confectionery, bakery, spa and home gifts posted to her address | developer.ongoody.com — self-serve key, free sandbox |
+| `HANDLED_CRON_SECRET` | `/api/cron/dispatch` requires `Authorization: Bearer …` | any random string — set it before you deploy |
 
 Goody issues two kinds of key and the adapter reads which from the prefix, so
 there is nothing extra to configure. A `goody_token_commerce_…` key resells
@@ -68,7 +69,6 @@ spends our own card. Set `GOODY_ENV=production` to leave the sandbox, and
 `GOODY_CARD_ID` only if you want to pin one card design — otherwise the
 adapter picks one, which it must, because Goody drops a gift message that
 arrives without a card.
-| `HANDLED_CRON_SECRET` | `/api/cron/dispatch` requires `Authorization: Bearer …` | any random string — set it before you deploy |
 
 Other knobs: `HANDLED_DATA_DIR` (SQLite location, default `./.data`),
 `HANDLED_ADAPTER=mock` (force simulated vendors even with real keys),
