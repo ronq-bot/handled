@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { Logo } from "./logo";
 
+// Rooted ("/#how") so they still resolve from pages that share this chrome,
+// like /risk — a bare "#how" goes nowhere from anywhere but the landing page.
 const SECTIONS = [
-  { href: "#how", label: "How it works" },
-  { href: "#gifts", label: "The catalogue" },
-  { href: "#pricing", label: "Membership" },
-  { href: "#faq", label: "Questions" },
+  { href: "/#how", label: "How it works" },
+  { href: "/#gifts", label: "The catalogue" },
+  { href: "/#pricing", label: "Membership" },
+  { href: "/#faq", label: "Questions" },
 ];
 
 export function MarketingHeader({ signedIn }: { signedIn: boolean }) {
@@ -76,6 +78,14 @@ export function SiteFooter() {
                   </a>
                 </li>
               ))}
+              <li>
+                <Link
+                  href="/risk"
+                  className="text-[0.9375rem] text-muted transition-colors hover:text-ink"
+                >
+                  The Doghouse Risk Meter
+                </Link>
+              </li>
             </ul>
           </nav>
 
