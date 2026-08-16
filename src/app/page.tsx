@@ -346,7 +346,10 @@ export default async function LandingPage() {
                     "Restaurants and experiences booked",
                     "Unlimited same-day rescues",
                   ],
-                  cta: "Enquire",
+                  // A named concierge requires a named human, and we have not
+                  // hired them yet. Shown but not joinable until we have.
+                  comingSoon: true,
+                  cta: "Coming soon",
                   featured: false,
                 },
               ].map((t, i) => (
@@ -357,7 +360,12 @@ export default async function LandingPage() {
                     t.featured ? "border-forest/40 bg-forest-tint" : ""
                   }`}
                 >
-                  <p className="smallcaps">{t.name}</p>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="smallcaps">{t.name}</p>
+                    {t.comingSoon && (
+                      <span className="tag border-brass/60 text-brass-deep">Coming soon</span>
+                    )}
+                  </div>
 
                   <p className="serif mt-6 text-5xl leading-none text-ink">{t.price}</p>
                   {t.suffix && <p className="mt-2 text-[0.8125rem] text-faint">{t.suffix}</p>}
@@ -375,12 +383,23 @@ export default async function LandingPage() {
                     ))}
                   </ul>
 
-                  <Link
-                    href="/signup"
-                    className={`btn mt-10 w-full ${t.featured ? "btn-primary" : "btn-ghost"}`}
-                  >
-                    {t.cta}
-                  </Link>
+                  {t.comingSoon ? (
+                    // Not a link on purpose: a concierge tier with nobody on
+                    // the other end is a promise we cannot keep yet.
+                    <span
+                      aria-disabled="true"
+                      className="btn btn-ghost mt-10 w-full cursor-default opacity-60"
+                    >
+                      {t.cta}
+                    </span>
+                  ) : (
+                    <Link
+                      href="/signup"
+                      className={`btn mt-10 w-full ${t.featured ? "btn-primary" : "btn-ghost"}`}
+                    >
+                      {t.cta}
+                    </Link>
+                  )}
                 </Reveal>
               ))}
             </div>
