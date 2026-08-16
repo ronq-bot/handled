@@ -33,6 +33,10 @@ const HOST =
     ? "https://api.giftbit.com/papi/v1"
     : "https://api-testbed.giftbit.com/papi/v1";
 
+// The dispatcher works through missions serially, so one hanging call here
+// would stall every order queued behind it — same reasoning as florist-one.
+const TIMEOUT_MS = 15_000;
+
 export function giftbitIsLive(): boolean {
   return Boolean(env.giftbitApiKey);
 }
@@ -52,16 +56,27 @@ async function call<T>(
 ): Promise<T> {
   if (!env.giftbitApiKey) throw new Error("Giftbit is not configured.");
 
-  const response = await fetch(`${HOST}${path}`, {
-    method: init.method,
-    headers: {
-      Authorization: `Bearer ${env.giftbitApiKey}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: init.body ? JSON.stringify(init.body) : undefined,
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${HOST}${path}`, {
+      method: init.method,
+      headers: {
+        Authorization: `Bearer ${env.giftbitApiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: init.body ? JSON.stringify(init.body) : undefined,
+      cache: "no-store",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (cause) {
+    const timedOut = cause instanceof Error && cause.name === "TimeoutError";
+    throw new Error(
+      timedOut
+        ? `Giftbit did not answer ${path} within ${TIMEOUT_MS / 1000}s.`
+        : `Giftbit is unreachable: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+  }
 
   const json = (await response.json().catch(() => ({}))) as T & CampaignResponse;
 

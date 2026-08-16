@@ -21,6 +21,7 @@ async function stripe<T>(
   path: string,
   params?: Record<string, string>,
   method: "GET" | "POST" = "POST",
+  idempotencyKey?: string,
 ): Promise<StripeResult<T>> {
   if (!env.stripeSecretKey) return { ok: false, error: "Stripe is not configured." };
 
@@ -33,6 +34,7 @@ async function stripe<T>(
       headers: {
         Authorization: `Bearer ${env.stripeSecretKey}`,
         "Content-Type": "application/x-www-form-urlencoded",
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
       },
       body: method === "POST" ? body : undefined,
       cache: "no-store",
@@ -138,8 +140,11 @@ export type ChargeResult =
   | { ok: false; reason: string };
 
 /**
- * Charge for one shipment, off-session. Idempotent on the mission id, so a
- * re-run of the dispatcher can never double-charge for the same gift.
+ * Charge for one shipment, off-session. The mission id is sent as Stripe's
+ * `Idempotency-Key`, so if the process dies between the charge succeeding and
+ * the mission being marked placed, the next dispatcher run replays the same
+ * intent instead of creating a second charge. (Stripe holds a key for 24
+ * hours — exactly the window in which an hourly cron would retry.)
  */
 export async function chargeForMission(
   user: User,
@@ -169,6 +174,8 @@ export async function chargeForMission(
       description,
       "metadata[mission_id]": missionId,
     },
+    "POST",
+    `mission-charge-${missionId}`,
   );
 
   if (!intent.ok) return { ok: false, reason: `Card declined: ${intent.error}` };
