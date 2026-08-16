@@ -552,6 +552,37 @@ check("every automated partner has a credential check wired to it", () => {
   }
 });
 
+check("we never list a gift below what the supplier charges us", () => {
+  // The mistake a hurried price edit makes is selling at a loss quietly.
+  const priced = ALL_PRODUCTS.filter((p) => p.vendorCostCents);
+  assert.ok(priced.length > 0, "expected at least one product with a recorded cost");
+  for (const p of priced) {
+    assert.ok(
+      p.priceCents >= p.vendorCostCents,
+      `${p.name} lists at ${p.priceCents} but costs ${p.vendorCostCents}`,
+    );
+    const margin = (p.priceCents - p.vendorCostCents) / p.vendorCostCents;
+    assert.ok(
+      margin >= 0.05 && margin <= 0.2,
+      `${p.name} margin is ${(margin * 100).toFixed(1)}%, outside the intended ~10%`,
+    );
+  }
+});
+
+check("no supplier's name reaches anything the customer can read", () => {
+  // Suppliers are a commercial relationship, not part of the brand. The map
+  // keeps `partner` and `url` for our own reference; neither is rendered.
+  const shown = coverageWithStatus().flatMap((r) => [
+    r.vendorName,
+    r.dateGuarantee,
+    r.gap,
+    ...r.examples,
+  ]);
+  for (const text of shown) {
+    assert.equal(/goody|giftbit|florist one|ongoody/i.test(text), false, `leaks a supplier: ${text}`);
+  }
+});
+
 check("every partner states a date guarantee and a gap", () => {
   for (const c of COVERAGE) {
     assert.ok(c.dateGuarantee.length > 20, `${c.partner} has no date guarantee`);

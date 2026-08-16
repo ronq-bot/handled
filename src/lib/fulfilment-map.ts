@@ -43,8 +43,8 @@ export const COVERAGE: Coverage[] = [
     url: "https://www.floristone.com/api/",
     readiness: "live",
     dateGuarantee:
-      "Exact. `getdeliverydates` returns the dates their 15,000-florist network can actually serve for a ZIP, and we refuse to book anything else. Delivers daily except Sundays and holidays.",
-    gap: "None in code. Add FLORIST_ONE_API_USER and FLORIST_ONE_API_PASSWORD and flowers ship for real.",
+      "Exact. Our supplier publishes the dates their 15,000-florist network can genuinely serve for a ZIP, and we refuse to book anything else. Every day except Sundays and holidays.",
+    gap: "None in code. Add the florist credentials and flowers ship for real.",
   },
   {
     vendorId: "moment_co",
@@ -54,7 +54,7 @@ export const COVERAGE: Coverage[] = [
     readiness: "live",
     dateGuarantee:
       "Perfect, because there is no logistics. The credit reaches him on the day, by email — never her, so the surprise is never at risk.",
-    gap: "None in code. Add GIFTBIT_API_KEY — the sandbox is self-serve at testbedapp.giftbit.com. Just needs a funded balance before anything sends.",
+    gap: "None in code. Add the credit-issuer credentials. Needs a funded balance before anything sends.",
   },
   {
     vendorId: "atelier_ink",
@@ -64,7 +64,7 @@ export const COVERAGE: Coverage[] = [
     readiness: "self-serve",
     dateGuarantee:
       "Estimated, not promised. Production plus carrier transit, so we work backwards from a lead time — which is exactly what `leadDaysOverride` already models.",
-    gap: "Adapter not written. Self-serve token, REST/JSON, supports a gift field on the order. Best for photo books and engraved keepsakes, not for a dated bouquet.",
+    gap: "Adapter not written. Self-serve token, REST/JSON, with a gift field on the order. Best for photo books and engraved keepsakes, not a dated bouquet.",
   },
   {
     vendorId: "orchard_club",
@@ -74,7 +74,7 @@ export const COVERAGE: Coverage[] = [
     readiness: "apply",
     dateGuarantee:
       "Dated delivery on their side, but we cannot confirm the contract until we have access.",
-    gap: "Real gift-delivery API covering fruit, sweets, wine and spa — but access requires an application and their approval. This is the one worth applying for first.",
+    gap: "A real dated gift-delivery API covering fruit, sweets, wine and spa, but access is by application and approval. The one worth applying for first.",
   },
   {
     vendorId: "cocoa_line",
@@ -84,7 +84,7 @@ export const COVERAGE: Coverage[] = [
     readiness: "live",
     dateGuarantee:
       "Posted on the day, not promised for one. They commit to the send; arrival is a carrier estimate, which is what the product's lead time already models.",
-    gap: "None in code. Add GOODY_API_KEY — self-serve, free sandbox. Each product needs its Goody catalogue id before it can ship.",
+    gap: "None. Coded, mapped and ready — this category dispatches as soon as credentials are in place.",
   },
   {
     vendorId: "hearthside",
@@ -94,7 +94,7 @@ export const COVERAGE: Coverage[] = [
     readiness: "live",
     dateGuarantee:
       "Posted on the day, not promised for one — the same send-date commitment as their confectionery range.",
-    gap: "None in code. Shares the Goody adapter with Cocoa Line. Note their recipients may swap a gift, so the category is right but the exact item is not guaranteed.",
+    gap: "None in code. Shares a supplier with Cocoa Line. Recipients may swap a gift, so the category is certain but the exact item is not.",
   },
   {
     vendorId: "cellar_seven",
@@ -104,7 +104,7 @@ export const COVERAGE: Coverage[] = [
     readiness: "manual",
     dateGuarantee:
       "None. Alcohol is state-regulated, needs an adult signature, and cannot go to most offices.",
-    gap: "No self-serve wine API exists that we could verify. Realistically a concierge task, or dropped from the catalogue until a partner is signed.",
+    gap: "No self-serve wine API we could verify. Realistically a concierge task, or dropped from the catalogue until a supplier is signed.",
   },
 ];
 
