@@ -140,6 +140,10 @@ const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
   ["users", "stripe_payment_method_id", "TEXT NOT NULL DEFAULT ''"],
   ["missions", "charge_ref", "TEXT NOT NULL DEFAULT ''"],
   ["missions", "vendor_payload", "TEXT NOT NULL DEFAULT ''"],
+  // When we last asked them to roll the year forward. Kept on the user rather
+  // than a mission because the nudge is about the account running out of
+  // cover, not about any one gift.
+  ["users", "renewal_nudged_at", "TEXT NOT NULL DEFAULT ''"],
 ];
 
 /* ── SQLite ─────────────────────────────────────────────────────── */

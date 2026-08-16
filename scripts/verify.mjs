@@ -19,7 +19,7 @@ register("./ts-loader.mjs", import.meta.url);
 const { addDays, nextAnniversary, previousBusinessDay, daysBetween } = await import(
   "../src/lib/date.ts"
 );
-const { planDelivery, dogHouseRisk } = await import("../src/lib/scheduling.ts");
+const { planDelivery, dogHouseRisk, isFeasible, MAX_SCHEDULE_DAYS } = await import("../src/lib/scheduling.ts");
 const { autoPick, rankGifts } = await import("../src/lib/picker.ts");
 const { getProduct } = await import("../src/lib/catalog.ts");
 
@@ -79,6 +79,29 @@ check("a weekend home delivery is left alone", () => {
   const plan = planDelivery("2026-08-22", fruit, homeAddress, "2026-07-28");
   assert.equal(plan.deliverOn, "2026-08-22");
   assert.equal(plan.shifted, false);
+});
+
+check("a date beyond twelve months is refused rather than booked", () => {
+  const plan = planDelivery("2027-12-01", bouquet, homeAddress, "2026-07-28");
+  assert.equal(plan.tooFar, true);
+  assert.match(plan.farReason, /over a year away/);
+  assert.equal(isFeasible("2027-12-01", bouquet, homeAddress, "2026-07-28"), false);
+});
+
+check("a date inside twelve months is still bookable", () => {
+  const plan = planDelivery("2027-07-01", bouquet, homeAddress, "2026-07-28");
+  assert.equal(plan.tooFar, false);
+  assert.equal(plan.farReason, "");
+  assert.equal(isFeasible("2027-07-01", bouquet, homeAddress, "2026-07-28"), true);
+});
+
+check("a recurring date never trips the horizon, because it always rolls to the next one", () => {
+  // The cap is aimed at one-off dates entered years out. nextAnniversary
+  // always lands inside a year, so ordinary birthdays must never be blocked.
+  for (const eventDate of ["2020-01-14", "2020-07-29", "2020-12-31"]) {
+    const next = nextAnniversary(eventDate, "2026-07-28");
+    assert.equal(planDelivery(next, bouquet, homeAddress, "2026-07-28").tooFar, false);
+  }
 });
 
 check("a long-lead personalized item is flagged too late when the runway is gone", () => {
@@ -362,6 +385,86 @@ const status = async (id) => (await db.get(`SELECT status FROM missions WHERE id
   assert.equal(Number(events.n), 0);
   passed += 1;
   console.log("  ok  no reminder on the ship day itself — that's what the order-placed email is for");
+}
+
+console.log("\nrenewal — asking for the next twelve months");
+
+async function seedForRenewal({ recurring = 1, deliverOn = "2026-08-20", nudgedAt = "" } = {}) {
+  const userId = newId("usr");
+  const recipientId = newId("rcp");
+  const addressId = newId("adr");
+  const occasionId = newId("occ");
+
+  await db.run(
+    `INSERT INTO users (id, email, password_hash, name, payment_ok, renewal_nudged_at, created_at)
+     VALUES (?, ?, 'x', 'Mike Ruiz', 1, ?, ?)`,
+    [userId, `${userId}@example.com`, nudgedAt, nowIso()],
+  );
+  await db.run(`INSERT INTO recipients (id, user_id, name, created_at) VALUES (?, ?, 'Dana', ?)`, [
+    recipientId, userId, nowIso(),
+  ]);
+  await db.run(
+    `INSERT INTO addresses (id, user_id, recipient_id, kind, line1, city, state, postal_code, created_at)
+     VALUES (?, ?, ?, 'home', '1 Main St', 'Charlotte', 'NC', '28202', ?)`,
+    [addressId, userId, recipientId, nowIso()],
+  );
+  await db.run(
+    `INSERT INTO occasions (id, user_id, recipient_id, kind, title, event_date, recurring, created_at)
+     VALUES (?, ?, ?, 'birthday', 'Birthday', '2026-08-20', ?, ?)`,
+    [occasionId, userId, recipientId, recurring, nowIso()],
+  );
+  await db.run(
+    `INSERT INTO missions (id, user_id, occasion_id, recipient_id, address_id, product_id,
+        deliver_on, ship_on, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'bouquet_garden_seasonal', ?, ?, 'delivered', ?, ?)`,
+    [newId("msn"), userId, occasionId, recipientId, addressId, deliverOn, deliverOn, nowIso(), nowIso()],
+  );
+  return userId;
+}
+
+{
+  // Cover runs out in 5 days — this is the moment to ask.
+  const id = await seedForRenewal({ deliverOn: "2026-08-20" });
+  const report = await runDispatch("2026-08-15");
+  assert.equal(report.renewalsNudged.includes(id), true);
+  passed += 1;
+  console.log("  ok  an account about to run out of scheduled gifts is asked to renew");
+}
+
+{
+  const id = await seedForRenewal({ deliverOn: "2027-06-01" });
+  const report = await runDispatch("2026-08-15");
+  assert.equal(report.renewalsNudged.includes(id), false);
+  passed += 1;
+  console.log("  ok  an account with months of cover left is left alone");
+}
+
+{
+  // A one-off gift is finished business, not a lapsed subscription.
+  const id = await seedForRenewal({ recurring: 0, deliverOn: "2026-08-20" });
+  const report = await runDispatch("2026-08-15");
+  assert.equal(report.renewalsNudged.includes(id), false);
+  passed += 1;
+  console.log("  ok  an account with no recurring date is not chased");
+}
+
+{
+  const id = await seedForRenewal({ deliverOn: "2026-08-20" });
+  const first = await runDispatch("2026-08-15");
+  const second = await runDispatch("2026-08-16");
+  assert.equal(first.renewalsNudged.includes(id), true);
+  assert.equal(second.renewalsNudged.includes(id), false);
+  passed += 1;
+  console.log("  ok  the nudge is sent once, not every day cover stays low");
+}
+
+{
+  // Long enough after the last nudge that asking again is fair.
+  const id = await seedForRenewal({ deliverOn: "2026-08-20", nudgedAt: "2026-01-01T00:00:00.000Z" });
+  const report = await runDispatch("2026-08-15");
+  assert.equal(report.renewalsNudged.includes(id), true);
+  passed += 1;
+  console.log("  ok  a nudge from a previous year does not silence this one");
 }
 
 console.log("\ndata layer");

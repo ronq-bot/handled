@@ -231,6 +231,12 @@ export async function scheduleMissionAction(formData: FormData): Promise<void> {
   if (!product) return;
 
   const plan = planDelivery(eventDate, product, address);
+
+  // The picker already hides these, so arriving here means a hand-made request
+  // or a date that moved underneath the page. Refuse rather than store a
+  // promise we have just said we will not make.
+  if (plan.tooFar || plan.tooLate) return;
+
   const id = newId("msn");
 
   await db.run(`INSERT INTO missions

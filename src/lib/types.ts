@@ -28,6 +28,8 @@ export type User = {
   payment_ok: number;
   stripe_customer_id: string;
   stripe_payment_method_id: string;
+  /** ISO timestamp of the last "your year is nearly up" nudge, or "". */
+  renewal_nudged_at: string;
   created_at: string;
 };
 

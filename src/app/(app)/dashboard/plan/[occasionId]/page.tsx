@@ -53,9 +53,13 @@ export default async function PlanPage({
     ...r,
     plan: planDelivery(eventDate, r.product, address),
   }));
-  const deliverable = withPlans.filter((r) => !r.plan.tooLate);
+  const deliverable = withPlans.filter((r) => !r.plan.tooLate && !r.plan.tooFar);
   const missed = withPlans.filter((r) => r.plan.tooLate);
   const top = deliverable[0];
+
+  // Every product shares the same date, so this is a fact about the occasion
+  // rather than about any one gift — say it once, at the top.
+  const beyondHorizon = withPlans.length > 0 && withPlans.every((r) => r.plan.tooFar);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -71,6 +75,13 @@ export default async function PlanPage({
       </div>
 
       <PlannerControls addresses={addresses} addressId={address.id} budget={budget} mode={mode} />
+
+      {beyondHorizon && (
+        <div className="card border-brass/40 bg-brass-tint p-4 text-sm">
+          <span className="font-semibold text-brass-deep">Too far out to book. </span>
+          <span className="text-muted">{withPlans[0].plan.farReason}</span>
+        </div>
+      )}
 
       {top?.plan.shifted && (
         <div className="card border-brass/40 bg-brass-tint p-4 text-sm">
