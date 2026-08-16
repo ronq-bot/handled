@@ -43,3 +43,11 @@ next-env.d.ts
 # local data
 /.data
 /.data
+
+# iCloud conflict copies. This project sits under a Desktop that iCloud
+# syncs, and iCloud resolves a conflict by leaving "name 2.ts" beside
+# "name.ts". Two of those reached main before this rule existed — stale
+# snapshots of a live file, which is the worst kind of thing to leave in
+# a repo for someone to read. Ignored rather than tidied by hand,
+# because they come back.
+* [0-9].*
