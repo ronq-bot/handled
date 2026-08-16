@@ -684,7 +684,7 @@ check("the recipient record has no contact route at all", () => {
 
 console.log("\ngoody adapter — shipped to her, signed by him");
 
-const { goodyAdapter, goodyIsLive, orderBatchBody, rejectionReason } = await import("../src/lib/vendors/goody.ts");
+const { goodyAdapter, goodyIsLive, orderBatchBody, rejectionReason, isCommerceKey, chooseCard } = await import("../src/lib/vendors/goody.ts");
 
 const goodyOrder = {
   mission: { id: "msn_g", gift_message: "Happy birthday. — M", deliver_on: "2026-08-20" },
@@ -720,10 +720,42 @@ check("the mission id is the idempotency key", () => {
 
 check("a message never travels without the card Goody requires", () => {
   // They reject a bare message with a 422, so the two move together or not
-  // at all. No GOODY_CARD_ID is configured here, so neither should appear.
-  const body = orderBatchBody(goodyOrder);
-  assert.equal("message" in body, false);
+  // at all. With no card resolved, the note is dropped rather than sent alone.
+  const withoutCard = orderBatchBody(goodyOrder, null);
+  assert.equal("message" in withoutCard, false);
+  assert.equal("card_id" in withoutCard, false);
+
+  const withCard = orderBatchBody(goodyOrder, "card-uuid");
+  assert.equal(withCard.card_id, "card-uuid");
+  assert.equal(withCard.message, "Happy birthday. — M");
+});
+
+check("a card without a note is pointless, so neither is sent", () => {
+  const noNote = { ...goodyOrder, mission: { ...goodyOrder.mission, gift_message: "   " } };
+  const body = orderBatchBody(noNote, "card-uuid");
   assert.equal("card_id" in body, false);
+  assert.equal("message" in body, false);
+});
+
+check("the key's own prefix decides how the order is paid for", () => {
+  // Two keys, two businesses: Commerce resells their catalogue and settles
+  // against stored value, Automation spends our card and must not send the
+  // field at all.
+  assert.equal(isCommerceKey("goody_token_commerce_abc"), true);
+  assert.equal(isCommerceKey("goody_token_user_abc"), false);
+  assert.equal(isCommerceKey(""), false);
+});
+
+check("a card is chosen by occasion, not by whichever came back first", () => {
+  const library = [
+    { id: "corporate", occasions: ["Sales Prospecting"] },
+    { id: "anytime", occasions: ["Anytime"] },
+    { id: "birthday", occasions: ["Birthday"] },
+  ];
+  assert.equal(chooseCard(library), "anytime");
+  // Falls back to something usable rather than nothing when nothing matches.
+  assert.equal(chooseCard([{ id: "only", occasions: ["Sympathy"] }]), "only");
+  assert.equal(chooseCard([]), null);
 });
 
 check("we never hand Goody a send date — our own dispatcher owns the timing", () => {

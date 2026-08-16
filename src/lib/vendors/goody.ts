@@ -41,6 +41,20 @@ export function goodyIsLive(): boolean {
 }
 
 /**
+ * Goody issues two kinds of key and they mean different businesses.
+ *
+ * An Automation key spends our own money to send our own gifts. A Commerce
+ * key resells their catalogue through us and settles against stored value,
+ * which is the arrangement that actually pays. The two need different payment
+ * instructions on the order, and the key itself says which it is — reading it
+ * from the prefix beats a second env var that can disagree with the key it is
+ * meant to describe.
+ */
+export function isCommerceKey(key = env.goodyApiKey ?? ""): boolean {
+  return key.startsWith("goody_token_commerce_");
+}
+
+/**
  * The parts of their product record that decide whether we may order it.
  * Measured against a 200-product sample of the live catalogue: 48% require a
  * variant choice and 33% are barred from at least one state, so neither is an
@@ -106,6 +120,51 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
   return json as T;
 }
 
+type GoodyCard = { id?: string; occasions?: (string | { name?: string })[] };
+
+/**
+ * Their card designs, fetched once per process.
+ *
+ * Goody rejects a gift message that arrives without a card, so without one of
+ * these the note he wrote is silently dropped. Resolved at runtime rather than
+ * pinned in config because card ids are theirs to withdraw, and a stale id
+ * would fail on the ship date — the one day there is no runway to fix it.
+ */
+let cardCache: Promise<string | null> | null = null;
+
+/** Their library is built for corporate gifting, so romantic occasions are thin. */
+const PREFERRED_CARD_OCCASIONS = ["Anytime", "Birthday", "Congratulations"];
+
+function cardOccasions(card: GoodyCard): string[] {
+  return (card.occasions ?? []).map((o) => (typeof o === "string" ? o : (o.name ?? "")));
+}
+
+/** Exported for testing: which card we would choose from a given library. */
+export function chooseCard(cards: GoodyCard[]): string | null {
+  for (const wanted of PREFERRED_CARD_OCCASIONS) {
+    const match = cards.find((c) => c.id && cardOccasions(c).includes(wanted));
+    if (match?.id) return match.id;
+  }
+  return cards.find((c) => c.id)?.id ?? null;
+}
+
+async function resolveCardId(): Promise<string | null> {
+  if (env.goodyCardId) return env.goodyCardId;
+
+  cardCache ??= (async () => {
+    try {
+      const result = await call<{ data?: GoodyCard[] }>("/cards");
+      return chooseCard(result.data ?? []);
+    } catch {
+      // A missing card costs us the note, not the gift. Carry on without one
+      // rather than failing an order over stationery.
+      return null;
+    }
+  })();
+
+  return cardCache;
+}
+
 /**
  * Why a gift cannot be ordered as it stands, or null if it can.
  *
@@ -146,10 +205,17 @@ export function rejectionReason(
  * him — Goody is the one live partner that ships to the recipient directly,
  * so the sender's identity has to be carried deliberately rather than assumed.
  */
-export function orderBatchBody({ mission, product, recipient, address, buyer }: OrderRequest) {
+export function orderBatchBody(
+  { mission, product, recipient, address, buyer }: OrderRequest,
+  cardId: string | null = null,
+) {
   const [first, ...rest] = recipient.name.trim().split(/\s+/);
+  const message = mission.gift_message.trim();
 
   return {
+    // A Commerce key resells their catalogue and settles against stored value.
+    // An Automation key spends our own card, and must not carry this field.
+    ...(isCommerceKey() ? { payment_method_id: "COMMERCE_STORED_VALUE" } : {}),
     // Idempotency: Goody rejects a replayed reference, so a re-run of the
     // dispatcher cannot send the same gift twice.
     customer_reference_id: mission.id,
@@ -157,9 +223,7 @@ export function orderBatchBody({ mission, product, recipient, address, buyer }: 
     send_method: "direct_send" as const,
     // A message is only accepted alongside a card, so both move together or
     // neither does — sending a bare message is a 422 from them.
-    ...(env.goodyCardId && mission.gift_message.trim()
-      ? { card_id: env.goodyCardId, message: mission.gift_message.slice(0, 500) }
-      : {}),
+    ...(cardId && message ? { card_id: cardId, message: message.slice(0, 500) } : {}),
     recipients: [
       {
         first_name: first || recipient.name,
@@ -215,7 +279,13 @@ export const goodyAdapter: FulfillmentAdapter = {
       const refusal = rejectionReason(goodyProduct, address.state, product.name);
       if (refusal) return { ok: false, reason: refusal };
 
-      const result = await call<OrderBatchResponse>("/order_batches", orderBatchBody(request));
+      // Only worth fetching when there is actually a note to carry.
+      const cardId = mission.gift_message.trim() ? await resolveCardId() : null;
+
+      const result = await call<OrderBatchResponse>(
+        "/order_batches",
+        orderBatchBody(request, cardId),
+      );
 
       const batchStatus = result.send_status ?? "";
       if (!SENDING_STATUSES.has(batchStatus)) {
