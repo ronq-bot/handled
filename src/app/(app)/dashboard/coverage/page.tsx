@@ -81,9 +81,13 @@ export default async function CoveragePage() {
                 <article key={r.vendorId} className="border-b border-line py-9">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-3">
                     <div>
-                      <h3 className="serif text-[1.5rem] leading-tight text-ink">{r.partner}</h3>
+                      {/* Our own house name, not the partner's. Who actually
+                          fulfils a category is a supplier relationship, and
+                          naming it here would put someone else's brand on our
+                          page — see `partner` in fulfilment-map.ts, which is
+                          kept for our own reference and deliberately unrendered. */}
+                      <h3 className="serif text-[1.5rem] leading-tight text-ink">{r.vendorName}</h3>
                       <p className="mt-1 text-[0.9375rem] text-muted">
-                        Stands in for <em>{r.vendorName}</em> ·{" "}
                         {r.categories.map((c) => CATEGORY_LABELS[c]).join(", ")} ·{" "}
                         {r.productCount} item{r.productCount === 1 ? "" : "s"}
                       </p>
@@ -110,18 +114,12 @@ export default async function CoveragePage() {
                     </div>
                   </dl>
 
-                  <div className="mt-6 flex flex-wrap items-baseline justify-between gap-4">
+                  {/* No outbound link: it would name the supplier as surely
+                      as printing their logo. `url` stays in the map for us. */}
+                  <div className="mt-6">
                     <p className="text-[0.8125rem] text-faint">
                       e.g. {r.examples.join(" · ")}
                     </p>
-                    <a
-                      href={r.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="link-rule"
-                    >
-                      Their docs ↗
-                    </a>
                   </div>
                 </article>
               ))}
