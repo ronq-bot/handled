@@ -684,7 +684,7 @@ check("the recipient record has no contact route at all", () => {
 
 console.log("\ngoody adapter — shipped to her, signed by him");
 
-const { goodyAdapter, goodyIsLive, orderBatchBody, rejectionReason, isCommerceKey, chooseCard } = await import("../src/lib/vendors/goody.ts");
+const { goodyAdapter, goodyIsLive, orderBatchBody, rejectionReason, isCommerceKey, chooseCard, resolveVariants } = await import("../src/lib/vendors/goody.ts");
 
 const goodyOrder = {
   mission: { id: "msn_g", gift_message: "Happy birthday. — M", deliver_on: "2026-08-20" },
@@ -779,11 +779,47 @@ check("we never hand Goody a send date — our own dispatcher owns the timing", 
   console.log("  ok  a product with no Goody id is refused before any network call");
 }
 
-check("a product needing a size or colour is refused, not guessed at", () => {
-  // 48% of a 200-product sample of their live catalogue sets this. Direct
-  // send must name a variant, and we hold no preference for her.
-  const reason = rejectionReason({ variants_num_selectable: 1 }, "NC", "Acrylic Tumbler");
-  assert.match(reason, /size or colour/i);
+check("our recorded variant is the one sent", () => {
+  // Their "variants" are a flavour or a colour — a curation decision made once
+  // in the catalogue, not something to guess per order.
+  const product = {
+    variants_label: "Flavor",
+    variants_num_selectable: 1,
+    variants: [{ id: "dark" }, { id: "milk" }],
+  };
+  assert.deepEqual(resolveVariants(product, ["dark"], "Truffles"), { ids: ["dark"] });
+});
+
+check("a sole option needs no decision from us", () => {
+  // The cashmere throw offers exactly one colour. Refusing that as an
+  // unmade choice, which an earlier version did, blocked a product with
+  // nothing to choose.
+  const product = { variants_num_selectable: 1, variants: [{ id: "heather-grey" }] };
+  assert.deepEqual(resolveVariants(product, undefined, "Throw"), { ids: ["heather-grey"] });
+});
+
+check("a product with no variants sends none", () => {
+  assert.deepEqual(resolveVariants({ variants_num_selectable: 0 }, undefined, "Oil"), { ids: [] });
+});
+
+check("a real unmade choice is refused rather than guessed", () => {
+  const product = {
+    variants_label: "Flavor",
+    variants_num_selectable: 1,
+    variants: [{ id: "dark" }, { id: "milk" }],
+  };
+  const out = resolveVariants(product, undefined, "Truffles");
+  assert.match(out.error, /does not record one/i);
+});
+
+check("a variant Goody has withdrawn is caught, not sent blind", () => {
+  const product = {
+    variants_label: "Flavor",
+    variants_num_selectable: 1,
+    variants: [{ id: "milk" }],
+  };
+  const out = resolveVariants(product, ["dark-discontinued"], "Truffles");
+  assert.match(out.error, /no longer offered/i);
 });
 
 check("a product barred from her state is caught before the order goes in", () => {
