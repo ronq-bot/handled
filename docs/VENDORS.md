@@ -26,11 +26,7 @@ Also offers cart management (`Create Cart`, `Add to Cart`…), which we skip —
 dated orders directly. ~20% commission funds the free tier.
 → https://www.floristone.com/api/
 
----
-
-## 2. Buildable today — public API, self-serve signup, no permission needed
-
-### Giftbit — experiences, credited to him — **live**
+### Giftbit — experiences, credited to him
 Fully self-serve: sign up at `testbedapp.giftbit.com`, generate a token, build. No sales call. A
 RESTful API for sending and tracking digital rewards programmatically. Coded in
 [`vendors/giftbit.ts`](../src/lib/vendors/giftbit.ts).
@@ -48,18 +44,44 @@ campaign sits in `AWAITING_FUNDS` until the account balance covers it, which our
 a failure, not a success.
 → https://www.giftbit.com/developers/
 
-*Alternatives with free sandboxes:* **Tremendous** (gift cards, prepaid Visa, cash).
-**Tango Card** is comparable but wants you to contact them for credentials, so it isn't self-serve.
+### Goody — curated physical gifts, shipped to her
+Self-serve key from `developer.ongoody.com`, free sandbox, no sales call. Backs three of our
+house slots — Cocoa Line (confectionery, bakery), Hearthside (spa, home) and Gilt & Grace
+(jewelry) — the widest single-partner coverage we actually have. Coded in
+[`vendors/goody.ts`](../src/lib/vendors/goody.ts).
+
+They commit to a *send*, never an arrival: "posted on the day", which the product lead times
+already model. The adapter pre-flights every product before ordering (roughly half their
+catalogue needs a variant chosen and a third is state-restricted), refuses anything it cannot
+order cleanly, and deliberately ignores their `scheduled_send_on` — our dispatcher is the only
+scheduler allowed to own the promise. Recipients may swap the gift for something in range,
+which is normal, not a fault.
+→ https://developer.ongoody.com/
 
 ### Printful — personalised, physical
 Self-serve token, REST/JSON, and a `gift` field on the order. Right for photo books, engraved
-keepsakes, and anything printed to order.
+keepsakes, and anything printed to order. Coded in
+[`vendors/printful.ts`](../src/lib/vendors/printful.ts): draft orders until
+`PRINTFUL_ENV=production`, mission id as `external_id` for idempotency, and it refuses any
+product whose design (`vendorSku` → sync variant) is not already in our Printful store.
 
 **Date is estimated, not promised** — production time plus carrier transit. That's fine, because
 the scheduler already models it: `leadDaysOverride` on the product, and the picker refuses
 anything that can't make the date. Wrong for a dated bouquet; right for a year-in-review book
 you commission in October.
 → https://developers.printful.com/docs/ (**Printify** is an equivalent alternative.)
+
+---
+
+## 2. Buildable today — public API, self-serve signup, no permission needed
+
+Everything self-serve on the shortlist is now coded (section 1), so what remains here are the
+proven alternates to swap in if a built partner disappoints:
+
+- **Tremendous** (gift cards, prepaid Visa, cash) — free sandbox; the Giftbit understudy.
+  **Tango Card** is comparable but wants you to contact them for credentials, so it isn't
+  self-serve.
+- **Printify** — the Printful equivalent, same print-on-demand model.
 
 ---
 
@@ -109,15 +131,18 @@ This is what would eventually make "10 AM, so the whole office sees it" real.
 
 ## Recommended order
 
-1. **Turn on Florist One.** The adapter is written. Flowers are the highest-volume, highest-return
+1. **Turn on Florist One.** ✅ Built. Flowers are the highest-volume, highest-return
    gift and the only category with a clean dated-delivery API. Prove the scheduler against real
    orders before adding surface area.
-2. **Build Giftbit.** Half a day, self-serve, and it makes the experiences category genuinely
-   reliable — plus it's the natural fallback when a physical delivery fails.
-3. **Apply to Gift Baskets Overseas.** Widest coverage of what's left; the application is the long
-   pole, so start it early.
-4. **Build Printful** when personalised gifts justify it.
-5. **Couriers** once volume justifies a same-day tier — this is the actual moat.
+2. **Build Giftbit.** ✅ Built — it makes the experiences category genuinely
+   reliable, and it's the natural fallback when a physical delivery fails.
+3. **Build Goody.** ✅ Built — three house slots on one self-serve key, the widest coverage we
+   hold, and it arrived before the Gift Baskets Overseas application ever needed to.
+4. **Build Printful.** ✅ Built — draft orders until `PRINTFUL_ENV=production`; each product
+   still needs its sync variant id recorded in `vendorSku` before it can print.
+5. **Apply to Gift Baskets Overseas.** Widest coverage of what's left; the application is the
+   long pole, so start it early.
+6. **Couriers** once volume justifies a same-day tier — this is the actual moat.
 
 ---
 

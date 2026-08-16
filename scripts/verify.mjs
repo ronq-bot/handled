@@ -519,7 +519,7 @@ check("the coverage map accounts for every product exactly once", () => {
 
 check("every partner marked automated has an adapter behind it", () => {
   const live = COVERAGE.filter((c) => c.readiness === "live").map((c) => c.partner).sort();
-  assert.deepEqual(live, ["Florist One", "Giftbit", "Goody", "Goody", "Goody"]);
+  assert.deepEqual(live, ["Florist One", "Giftbit", "Goody", "Goody", "Goody", "Printful"]);
 });
 
 check("nothing claims to be dispatching without credentials", () => {
@@ -538,10 +538,10 @@ check("every automated partner has a credential check wired to it", () => {
   // Without this, a slot can be marked live while its check silently returns
   // false, so the page shows "Automated now" and never "Dispatching" no
   // matter what is configured. That regression shipped once already.
-  const { GOODY_API_KEY, FLORIST_ONE_API_USER, FLORIST_ONE_API_PASSWORD, GIFTBIT_API_KEY } =
+  const { GOODY_API_KEY, FLORIST_ONE_API_USER, FLORIST_ONE_API_PASSWORD, GIFTBIT_API_KEY, PRINTFUL_API_KEY } =
     process.env;
   const anyConfigured = Boolean(
-    GOODY_API_KEY || GIFTBIT_API_KEY || (FLORIST_ONE_API_USER && FLORIST_ONE_API_PASSWORD),
+    GOODY_API_KEY || GIFTBIT_API_KEY || PRINTFUL_API_KEY || (FLORIST_ONE_API_USER && FLORIST_ONE_API_PASSWORD),
   );
   // With no keys present every live row must read false — and crucially the
   // property has to exist, which a missing map entry would still satisfy. So
@@ -888,6 +888,79 @@ check("an ordinary product passes the pre-flight untouched", () => {
   console.log("  ok  an incomplete address is caught before it reaches them");
 }
 
+console.log("\nprintful adapter — printed to order, shipped to her");
+
+const { printfulAdapter, printfulIsLive, orderBody, confirmOrders } = await import("../src/lib/vendors/printful.ts");
+
+const printfulOrder = {
+  mission: { id: "msn_p", gift_message: "Sixteen characters, chosen carefully. — M" },
+  product: { id: "bracelet_engraved", name: "Engraved Bar Bracelet", priceCents: 14500, vendorSku: "4938271" },
+  recipient: { name: "Dana Ruiz" },
+  address: { line1: "412 Rosewood Ln", line2: "Apt 3", city: "Charlotte", state: "NC", postal_code: "28202", country: "US" },
+  buyer: { name: "Mike Ruiz", email: "mike@example.com" },
+};
+
+check("printful is live exactly when its key is present", () => {
+  assert.equal(printfulIsLive(), Boolean(process.env.PRINTFUL_API_KEY));
+});
+
+check("the parcel goes to her name and address, with no way to contact her", () => {
+  const body = orderBody(printfulOrder);
+  assert.equal(body.recipient.name, "Dana Ruiz");
+  assert.equal(body.recipient.address1, "412 Rosewood Ln");
+  assert.equal(body.recipient.zip, "28202");
+  // No email, no phone — Printful must have no route to her at all, and the
+  // buyer's email must not stand in for hers on a physical parcel either.
+  const serialised = JSON.stringify(body);
+  assert.equal("email" in body.recipient, false);
+  assert.equal("phone" in body.recipient, false);
+  assert.equal(/@/.test(serialised.replace(/msn_p/g, "")), false);
+});
+
+check("the mission id is the idempotency key", () => {
+  assert.equal(orderBody(printfulOrder).external_id, "msn_p");
+});
+
+check("the gift message rides on the order, signed by him", () => {
+  const body = orderBody(printfulOrder);
+  assert.match(body.gift.message, /Sixteen characters/);
+  assert.match(body.gift.subject, /Mike Ruiz/);
+});
+
+check("no message means no gift block, not an empty one", () => {
+  const silent = { ...printfulOrder, mission: { ...printfulOrder.mission, gift_message: "  " } };
+  assert.equal("gift" in orderBody(silent), false);
+});
+
+check("the design pointer is the sync variant id from vendorSku", () => {
+  const body = orderBody(printfulOrder);
+  assert.deepEqual(body.items, [{ sync_variant_id: 4938271, quantity: 1 }]);
+});
+
+check("draft by default; only an explicit production flag spends money", () => {
+  assert.equal(confirmOrders("draft"), false);
+  assert.equal(confirmOrders(undefined), false);
+  assert.equal(confirmOrders("production"), true);
+});
+
+{
+  const noDesign = { ...printfulOrder, product: { ...printfulOrder.product, vendorSku: undefined } };
+  const result = await printfulAdapter.placeOrder(noDesign);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /no Printful design on file/i);
+  passed += 1;
+  console.log("  ok  a product with no recorded design is refused before any network call");
+}
+
+{
+  const noStreet = { ...printfulOrder, address: { ...printfulOrder.address, line1: " " } };
+  const result = await printfulAdapter.placeOrder(noStreet);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /street address/i);
+  passed += 1;
+  console.log("  ok  an incomplete address is caught before it reaches them");
+}
+
 console.log("\nintegrations");
 
 const { integrationStatus } = await import("../src/lib/env.ts");
@@ -900,6 +973,7 @@ check("an integration is live only when its own key is present", () => {
     database: Boolean(process.env.DATABASE_URL),
     giftcards: Boolean(process.env.GIFTBIT_API_KEY),
     curatedgifts: Boolean(process.env.GOODY_API_KEY),
+    personalized: Boolean(process.env.PRINTFUL_API_KEY),
     florist: Boolean(process.env.FLORIST_ONE_API_USER && process.env.FLORIST_ONE_API_PASSWORD),
   };
   for (const i of integrationStatus()) {

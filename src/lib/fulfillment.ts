@@ -86,6 +86,11 @@ const LIVE_VENDORS: Record<string, () => Promise<FulfillmentAdapter | null>> = {
     const { goodyAdapter, goodyIsLive } = await import("./vendors/goody");
     return goodyIsLive() ? goodyAdapter : null;
   },
+  // Atelier Ink is our personalised slot; Printful prints and ships it.
+  atelier_ink: async () => {
+    const { printfulAdapter, printfulIsLive } = await import("./vendors/printful");
+    return printfulIsLive() ? printfulAdapter : null;
+  },
 };
 
 export async function adapterFor(vendorId: string): Promise<FulfillmentAdapter> {

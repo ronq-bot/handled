@@ -62,6 +62,12 @@ export const env = {
   /** Pins a specific card design. Left unset, the adapter picks one itself. */
   goodyCardId: read("GOODY_CARD_ID"),
 
+  printfulApiKey: read("PRINTFUL_API_KEY"),
+  /** "production" confirms (charges) orders. Anything else creates drafts. */
+  printfulEnv: read("PRINTFUL_ENV") ?? "draft",
+  /** Only needed with an account-level token that spans several stores. */
+  printfulStoreId: read("PRINTFUL_STORE_ID"),
+
   cronSecret: read("HANDLED_CRON_SECRET"),
 } as const;
 
@@ -71,7 +77,8 @@ export type IntegrationKey =
   | "database"
   | "florist"
   | "giftcards"
-  | "curatedgifts";
+  | "curatedgifts"
+  | "personalized";
 
 export type IntegrationStatus = {
   key: IntegrationKey;
@@ -135,6 +142,16 @@ export function integrationStatus(): IntegrationStatus[] {
         : "Chocolate, bakery, spa and home gifts are simulated locally.",
       needs: "GOODY_API_KEY",
       where: "developer.ongoody.com — self-serve key, free sandbox",
+    },
+    {
+      key: "personalized",
+      name: "Printful",
+      live: Boolean(env.printfulApiKey),
+      behaviour: env.printfulApiKey
+        ? `Personalised gifts are printed and shipped to her address${env.printfulEnv === "production" ? "" : " (draft orders — nothing is charged or produced)"}.`
+        : "Engraved and printed-to-order gifts are simulated locally.",
+      needs: "PRINTFUL_API_KEY",
+      where: "printful.com dashboard → Settings → API — self-serve token, no sales call",
     },
     {
       key: "florist",

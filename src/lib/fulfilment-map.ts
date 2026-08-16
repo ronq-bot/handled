@@ -2,6 +2,7 @@ import { VENDORS, PRODUCTS, type ProductCategory } from "./catalog";
 import { floristOneIsLive } from "./vendors/florist-one";
 import { giftbitIsLive } from "./vendors/giftbit";
 import { goodyIsLive } from "./vendors/goody";
+import { printfulIsLive } from "./vendors/printful";
 
 /**
  * Which real-world partner would actually dispatch each category, and how far
@@ -61,10 +62,10 @@ export const COVERAGE: Coverage[] = [
     categories: ["personalized"],
     partner: "Printful",
     url: "https://developers.printful.com/docs/",
-    readiness: "self-serve",
+    readiness: "live",
     dateGuarantee:
       "Estimated, not promised. Production plus carrier transit, so we work backwards from a lead time — which is exactly what `leadDaysOverride` already models.",
-    gap: "Adapter not written. Self-serve token, REST/JSON, with a gift field on the order. Best for photo books and engraved keepsakes, not a dated bouquet.",
+    gap: "Adapter written; needs PRINTFUL_API_KEY plus each product's sync variant id in vendorSku — the design must exist in our Printful store before we can print it.",
   },
   {
     vendorId: "orchard_club",
@@ -144,6 +145,7 @@ const CREDENTIAL_CHECKS: Record<string, () => boolean> = {
   cocoa_line: goodyIsLive,
   hearthside: goodyIsLive,
   gilt_grace: goodyIsLive,
+  atelier_ink: printfulIsLive,
 };
 
 /** Adds the runtime truth — whether credentials are actually present. */
