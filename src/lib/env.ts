@@ -50,10 +50,16 @@ export const env = {
   /** "production" switches off the testbed host. Anything else stays sandboxed. */
   giftbitEnv: read("GIFTBIT_ENV") ?? "testbed",
 
+  /**
+   * Either kind of Goody key. A `goody_token_commerce_…` key resells their
+   * catalogue and settles against stored value; a `goody_token_user_…` key
+   * spends our own card. The adapter reads the prefix rather than asking for
+   * a second variable that could contradict it.
+   */
   goodyApiKey: read("GOODY_API_KEY"),
   /** "production" switches off the sandbox host. Anything else stays sandboxed. */
   goodyEnv: read("GOODY_ENV") ?? "sandbox",
-  /** Goody only accepts a gift message alongside one of their card designs. */
+  /** Pins a specific card design. Left unset, the adapter picks one itself. */
   goodyCardId: read("GOODY_CARD_ID"),
 
   cronSecret: read("HANDLED_CRON_SECRET"),
