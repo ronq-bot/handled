@@ -1,6 +1,7 @@
 import { VENDORS, PRODUCTS, type ProductCategory } from "./catalog";
 import { floristOneIsLive } from "./vendors/florist-one";
 import { giftbitIsLive } from "./vendors/giftbit";
+import { goodyIsLive } from "./vendors/goody";
 
 /**
  * Which real-world partner would actually dispatch each category, and how far
@@ -78,20 +79,22 @@ export const COVERAGE: Coverage[] = [
   {
     vendorId: "cocoa_line",
     categories: ["chocolate", "bakery"],
-    partner: "Giftnote",
-    url: "https://www.giftnote.com/features/gifting-api",
-    readiness: "apply",
-    dateGuarantee: "Carrier-based, tracked across 100+ carriers. Estimated rather than promised.",
-    gap: "Storefront and server-side APIs exist, but onboarding goes through their team rather than a signup form.",
+    partner: "Goody",
+    url: "https://developer.ongoody.com/",
+    readiness: "live",
+    dateGuarantee:
+      "Posted on the day, not promised for one. They commit to the send; arrival is a carrier estimate, which is what the product's lead time already models.",
+    gap: "None in code. Add GOODY_API_KEY — self-serve, free sandbox. Each product needs its Goody catalogue id before it can ship.",
   },
   {
     vendorId: "hearthside",
     categories: ["spa", "plant"],
-    partner: "Sendoso / Snappy",
-    url: "https://developer.sendoso.com/rest-api/overview/introduction",
-    readiness: "apply",
-    dateGuarantee: "Carrier-based. Built for volume sending, not for a specific promised date.",
-    gap: "Both are enterprise sales motions with minimums. Sensible at scale, wrong for a first integration.",
+    partner: "Goody",
+    url: "https://developer.ongoody.com/",
+    readiness: "live",
+    dateGuarantee:
+      "Posted on the day, not promised for one — the same send-date commitment as their confectionery range.",
+    gap: "None in code. Shares the Goody adapter with Cocoa Line. Note their recipients may swap a gift, so the category is right but the exact item is not guaranteed.",
   },
   {
     vendorId: "cellar_seven",
@@ -119,17 +122,25 @@ export const READINESS_BLURB: Record<Readiness, string> = {
   manual: "No API we can use. A person places this order, or we don't offer it.",
 };
 
+/**
+ * Which check proves a slot is actually configured. Kept as a map beside the
+ * coverage data rather than a chain of comparisons, so adding a partner is one
+ * line here instead of an edit that is easy to forget — the previous shape
+ * silently reported a configured vendor as not dispatching.
+ */
+const CREDENTIAL_CHECKS: Record<string, () => boolean> = {
+  petal_post: floristOneIsLive,
+  moment_co: giftbitIsLive,
+  cocoa_line: goodyIsLive,
+  hearthside: goodyIsLive,
+};
+
 /** Adds the runtime truth — whether credentials are actually present. */
 export function coverageWithStatus() {
   return COVERAGE.map((c) => {
     const vendor = VENDORS[c.vendorId];
     const products = PRODUCTS.filter((p) => p.vendorId === c.vendorId);
-    const credentialsPresent =
-      c.vendorId === "petal_post"
-        ? floristOneIsLive()
-        : c.vendorId === "moment_co"
-          ? giftbitIsLive()
-          : false;
+    const credentialsPresent = CREDENTIAL_CHECKS[c.vendorId]?.() ?? false;
 
     return {
       ...c,

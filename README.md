@@ -29,7 +29,7 @@ npm run verify                                    # SQLite
 npm run verify:both -- postgresql://…/handled_test  # both engines
 ```
 
-68 checks covering calendar math, the picker's hard rules, delivery planning, risk scoring, the
+82 checks covering calendar math, the picker's hard rules, delivery planning, risk scoring, the
 dispatcher's state machine, the SQL placeholder translation and the integration fallbacks. Uses a
 throwaway database, and the whole suite runs green against **both** SQLite and Postgres.
 
@@ -59,6 +59,7 @@ nothing else changes. **Account → Connected services** shows live status.
 | `DATABASE_URL` | Hosted Postgres instead of the local file | neon.tech or supabase.com |
 | `FLORIST_ONE_API_USER` + `_PASSWORD` | Flowers ordered from real florists against confirmed delivery dates | floristone.com/api |
 | `GIFTBIT_API_KEY` | An experience credit is emailed to *him* on the day — never to her, so the surprise holds | testbedapp.giftbit.com — self-serve sandbox |
+| `GOODY_API_KEY` | Confectionery, bakery, spa and home gifts posted to her address | developer.ongoody.com — self-serve key, free sandbox |
 | `HANDLED_CRON_SECRET` | `/api/cron/dispatch` requires `Authorization: Bearer …` | any random string — set it before you deploy |
 
 Other knobs: `HANDLED_DATA_DIR` (SQLite location, default `./.data`),
