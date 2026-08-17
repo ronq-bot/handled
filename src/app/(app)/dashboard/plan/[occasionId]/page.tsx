@@ -30,7 +30,10 @@ export default async function PlanPage({
   const recipient = await getRecipient(user.id, occasion.recipient_id);
   if (!recipient) notFound();
 
-  const addresses = await listAddresses(user.id, recipient.id);
+  const [addresses, recent] = await Promise.all([
+    listAddresses(user.id, recipient.id),
+    recentProductIds(user.id, recipient.id),
+  ]);
   if (addresses.length === 0) redirect(`/dashboard/people?needAddress=${recipient.id}`);
 
   const address = addresses.find((a) => a.id === query.address) ?? addresses[0];
@@ -47,7 +50,7 @@ export default async function PlanPage({
     address,
     occasionKind: occasion.kind,
     budgetCents: budget * 100,
-    recentProductIds: await recentProductIds(user.id, recipient.id),
+    recentProductIds: recent,
   };
   const ranked = rankGifts(pickInput);
 
@@ -192,7 +195,13 @@ export default async function PlanPage({
               </div>
             )}
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Keyed on the controls so a new search/budget/address remounts
+                the radios — uncontrolled defaultChecked otherwise leaves the
+                previous selection checked while the "Best match" tag moves. */}
+            <div
+              key={`${search}|${budget}|${address.id}`}
+              className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+            >
               {choosable.map((r, i) => (
                 <label key={r.product.id} className="group cursor-pointer">
                   <input
@@ -275,7 +284,7 @@ export default async function PlanPage({
           <button
             type="submit"
             className="btn btn-primary btn-lg"
-            disabled={mode === "auto" && !top}
+            disabled={mode === "auto" ? !top : choosable.length === 0}
           >
             Lock it in →
           </button>

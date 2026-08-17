@@ -5,6 +5,7 @@ import { adapterFor } from "./fulfillment";
 import { affiliateCentsFor } from "./fulfilment-map";
 import { chargeForMission, userCanBeCharged } from "./payments";
 import {
+  emailArrivingToday,
   emailDelivered,
   emailFailed,
   emailOrderPlaced,
@@ -71,8 +72,12 @@ export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchRepo
     [asOf, addDays(asOf, REMINDER_DAYS_BEFORE)],
   );
   for (const mission of dueForReminder) {
-    await sendReminder(mission, asOf);
-    report.reminded.push(mission.id);
+    try {
+      if (await sendReminder(mission, asOf)) report.reminded.push(mission.id);
+    } catch (cause) {
+      // A reminder is a courtesy; never let one bad row stop the run.
+      console.error(`dispatch: reminder for ${mission.id} threw`, cause);
+    }
   }
 
   const due = await db.all<Mission>(
@@ -80,101 +85,16 @@ export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchRepo
     [asOf],
   );
 
+  // Each mission is isolated: one customer's transient DB error or vendor
+  // surprise must never starve every mission queued behind it.
   for (const mission of due) {
-    const product = getProduct(mission.product_id);
-    if (!product) {
-      await failMission(mission.id, "No product selected for this gift.");
-      report.failed.push({ id: mission.id, reason: "No product selected" });
-      continue;
+    try {
+      await placeMission(mission, report);
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : String(cause);
+      console.error(`dispatch: placing ${mission.id} threw`, cause);
+      report.failed.push({ id: mission.id, reason: `Unexpected error: ${reason}` });
     }
-
-    const recipient = await db.get<Recipient>(`SELECT * FROM recipients WHERE id = ?`, [
-      mission.recipient_id,
-    ]);
-    const address = await db.get<Address>(`SELECT * FROM addresses WHERE id = ?`, [
-      mission.address_id,
-    ]);
-
-    if (!recipient || !address) {
-      await failMission(mission.id, "Recipient or address is missing.");
-      report.failed.push({ id: mission.id, reason: "Missing recipient or address" });
-      continue;
-    }
-
-    const user = await db.get<User>(`SELECT * FROM users WHERE id = ?`, [mission.user_id]);
-
-    if (!user) {
-      await failMission(mission.id, "The account behind this gift no longer exists.");
-      report.failed.push({ id: mission.id, reason: "Missing account" });
-      continue;
-    }
-
-    if (!userCanBeCharged(user)) {
-      const reason = "No payment method on file — we couldn't place the order.";
-      await failMission(mission.id, reason);
-      await notifyFailure(user, mission, product, recipient, reason);
-      report.failed.push({ id: mission.id, reason: "No payment method" });
-      continue;
-    }
-
-    const adapter = await adapterFor(product.vendorId);
-    const result = await adapter.placeOrder({ mission, product, recipient, address, buyer: user });
-
-    if (!result.ok) {
-      await failMission(mission.id, result.reason);
-      await notifyFailure(user, mission, product, recipient, result.reason);
-      report.failed.push({ id: mission.id, reason: result.reason });
-      continue;
-    }
-
-    // Only take the money once the vendor has accepted the order. If the
-    // charge then fails we still have the order, so this reads as needing
-    // attention rather than silently shipping something unpaid for.
-    const charge = await chargeForMission(
-      user,
-      mission.id,
-      result.priceCents,
-      `${product.name} for ${recipient.name}`,
-    );
-
-    if (!charge.ok) {
-      await failMission(mission.id, charge.reason);
-      await notifyFailure(user, mission, product, recipient, charge.reason);
-      report.failed.push({ id: mission.id, reason: charge.reason });
-      continue;
-    }
-
-    await db.run(
-      `UPDATE missions
-       SET status = 'placed', vendor_id = ?, vendor_order_ref = ?, price_cents = ?,
-           affiliate_cents = ?, failure_reason = '', updated_at = ?
-       WHERE id = ?`,
-      [
-        product.vendorId,
-        result.vendorOrderRef,
-        result.priceCents,
-        affiliateCentsFor(product),
-        nowIso(),
-        mission.id,
-      ],
-    );
-    await logMissionEvent(
-      mission.id,
-      "placed",
-      `Order ${result.vendorOrderRef} placed via ${adapter.id}. Charged ${charge.reference}.`,
-    );
-
-    await emailOrderPlaced({
-      to: user.email,
-      firstName: firstNameOf(user),
-      gift: product.name,
-      recipient: recipient.name,
-      occasion: await occasionTitle(mission.occasion_id),
-      deliverOn: mission.deliver_on,
-      where: describe(address),
-    });
-
-    report.placed.push(mission.id);
   }
 
   // Advance anything already in flight. Vendors normally push these via webhook;
@@ -184,9 +104,14 @@ export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchRepo
     [asOf],
   );
   for (const { id } of toShip) {
-    await setStatus(id, "shipped");
-    await logMissionEvent(id, "shipped", "Out for delivery.");
-    report.shipped.push(id);
+    try {
+      await setStatus(id, "shipped");
+      await logMissionEvent(id, "shipped", "Out for delivery.");
+      await notifyArriving(id);
+      report.shipped.push(id);
+    } catch (cause) {
+      console.error(`dispatch: shipping ${id} threw`, cause);
+    }
   }
 
   const toDeliver = await db.all<{ id: string }>(
@@ -194,15 +119,157 @@ export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchRepo
     [asOf],
   );
   for (const { id } of toDeliver) {
-    await setStatus(id, "delivered");
-    await logMissionEvent(id, "delivered", "Delivered. You're a hero and you did nothing.");
-    await notifyDelivered(id);
-    report.delivered.push(id);
+    try {
+      await setStatus(id, "delivered");
+      await logMissionEvent(id, "delivered", "Delivered. You're a hero and you did nothing.");
+      await notifyDelivered(id);
+      report.delivered.push(id);
+    } catch (cause) {
+      console.error(`dispatch: delivering ${id} threw`, cause);
+    }
   }
 
-  report.renewalsNudged.push(...(await nudgeRenewals(asOf)));
+  try {
+    report.renewalsNudged.push(...(await nudgeRenewals(asOf)));
+  } catch (cause) {
+    console.error("dispatch: renewal nudges threw", cause);
+  }
 
   return report;
+}
+
+/** One mission through the gauntlet: guards, vendor, money, record. */
+async function placeMission(mission: Mission, report: DispatchReport): Promise<void> {
+  const db = await getDb();
+
+  const product = getProduct(mission.product_id);
+  if (!product) {
+    await failMission(mission.id, "No product selected for this gift.");
+    report.failed.push({ id: mission.id, reason: "No product selected" });
+    return;
+  }
+
+  const recipient = await db.get<Recipient>(`SELECT * FROM recipients WHERE id = ?`, [
+    mission.recipient_id,
+  ]);
+  const address = await db.get<Address>(`SELECT * FROM addresses WHERE id = ?`, [
+    mission.address_id,
+  ]);
+
+  if (!recipient || !address) {
+    await failMission(mission.id, "Recipient or address is missing.");
+    report.failed.push({ id: mission.id, reason: "Missing recipient or address" });
+    return;
+  }
+
+  const user = await db.get<User>(`SELECT * FROM users WHERE id = ?`, [mission.user_id]);
+
+  if (!user) {
+    await failMission(mission.id, "The account behind this gift no longer exists.");
+    report.failed.push({ id: mission.id, reason: "Missing account" });
+    return;
+  }
+
+  if (!userCanBeCharged(user)) {
+    const reason = "No payment method on file — we couldn't place the order.";
+    await failMission(mission.id, reason);
+    await notifyFailure(user, mission, product, recipient, reason);
+    report.failed.push({ id: mission.id, reason: "No payment method" });
+    return;
+  }
+
+  // A scheduled mission that already carries a vendor reference is a previous
+  // run that ordered successfully and then died (or had its card declined and
+  // was retried) — the gift is on its way. Re-ordering would send a second
+  // one, so we skip straight to the money. This is what makes a replayed
+  // dispatch safe with vendors that reject a duplicate reference instead of
+  // returning the original order.
+  let vendorOrderRef = mission.vendor_order_ref;
+  let adapterId = mission.vendor_id || product.vendorId;
+
+  if (!vendorOrderRef) {
+    const adapter = await adapterFor(product.vendorId);
+    const result = await adapter.placeOrder({ mission, product, recipient, address, buyer: user });
+
+    if (!result.ok) {
+      await failMission(mission.id, result.reason);
+      await notifyFailure(user, mission, product, recipient, result.reason);
+      report.failed.push({ id: mission.id, reason: result.reason });
+      return;
+    }
+
+    vendorOrderRef = result.vendorOrderRef;
+    adapterId = adapter.id;
+
+    // Persist the reference the moment the vendor accepts, before any money
+    // moves: if we crash between here and 'placed', the next run finds the
+    // reference and does not order twice — and if the charge below fails,
+    // ops can still see exactly which live vendor order needs attention.
+    await db.run(
+      `UPDATE missions SET vendor_id = ?, vendor_order_ref = ?, updated_at = ?
+       WHERE id = ? AND status = 'scheduled'`,
+      [product.vendorId, vendorOrderRef, nowIso(), mission.id],
+    );
+  }
+
+  // Charge the price the user locked in when they scheduled the gift — the
+  // catalogue may have been re-synced since, and a price he never saw is not
+  // a price he agreed to. Only take the money once the vendor has accepted.
+  // Prior recorded failures count as the attempt number, so a genuine retry
+  // gets a fresh Stripe idempotency key while a crash-replay reuses the old.
+  const amountCents = mission.price_cents > 0 ? mission.price_cents : product.priceCents;
+  const prior = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM mission_events WHERE mission_id = ? AND status = 'failed'`,
+    [mission.id],
+  );
+  const charge = await chargeForMission(
+    user,
+    mission.id,
+    amountCents,
+    `${product.name} for ${recipient.name}`,
+    Number(prior?.n ?? 0),
+  );
+
+  if (!charge.ok) {
+    await failMission(mission.id, charge.reason);
+    await notifyFailure(user, mission, product, recipient, charge.reason);
+    report.failed.push({ id: mission.id, reason: charge.reason });
+    return;
+  }
+
+  // Guarded on status so a cancellation that landed while the vendor call was
+  // in flight is never overwritten back to 'placed'.
+  await db.run(
+    `UPDATE missions
+     SET status = 'placed', vendor_id = ?, vendor_order_ref = ?, price_cents = ?,
+         affiliate_cents = ?, failure_reason = '', updated_at = ?
+     WHERE id = ? AND status = 'scheduled'`,
+    [
+      product.vendorId,
+      vendorOrderRef,
+      amountCents,
+      affiliateCentsFor({ vendorId: product.vendorId, priceCents: amountCents }),
+      nowIso(),
+      mission.id,
+    ],
+  );
+  await logMissionEvent(
+    mission.id,
+    "placed",
+    `Order ${vendorOrderRef} placed via ${adapterId}. Charged ${charge.reference}.`,
+  );
+
+  await emailOrderPlaced({
+    to: user.email,
+    firstName: firstNameOf(user),
+    gift: product.name,
+    recipient: recipient.name,
+    occasion: await occasionTitle(mission.occasion_id),
+    deliverOn: mission.deliver_on,
+    where: describe(address),
+  });
+
+  report.placed.push(mission.id);
 }
 
 /**
@@ -289,7 +356,8 @@ async function occasionTitle(occasionId: string): Promise<string> {
   return row?.title ?? "the date";
 }
 
-async function sendReminder(mission: Mission, asOf: IsoDate): Promise<void> {
+/** True when the heads-up actually went out (and was recorded as sent). */
+async function sendReminder(mission: Mission, asOf: IsoDate): Promise<boolean> {
   const db = await getDb();
   const product = getProduct(mission.product_id);
   const recipient = await db.get<Recipient>(`SELECT * FROM recipients WHERE id = ?`, [
@@ -299,7 +367,7 @@ async function sendReminder(mission: Mission, asOf: IsoDate): Promise<void> {
     mission.address_id,
   ]);
   const user = await db.get<User>(`SELECT * FROM users WHERE id = ?`, [mission.user_id]);
-  if (!product || !recipient || !address || !user) return;
+  if (!product || !recipient || !address || !user) return false;
 
   await emailUpcomingOrder({
     to: user.email,
@@ -317,6 +385,7 @@ async function sendReminder(mission: Mission, asOf: IsoDate): Promise<void> {
     "reminder",
     `Heads-up sent — ordering in ${daysBetween(asOf, mission.ship_on)} day(s).`,
   );
+  return true;
 }
 
 async function notifyFailure(
@@ -336,6 +405,30 @@ async function notifyFailure(
     where: "",
     reason,
     fixUrl: `${env.appUrl}/dashboard/gifts/${mission.id}`,
+  });
+}
+
+/** "Her flowers arrive today. Act natural." — sent on the delivery day. */
+async function notifyArriving(missionId: string): Promise<void> {
+  const db = await getDb();
+  const mission = await db.get<Mission>(`SELECT * FROM missions WHERE id = ?`, [missionId]);
+  if (!mission) return;
+
+  const user = await db.get<User>(`SELECT * FROM users WHERE id = ?`, [mission.user_id]);
+  const recipient = await db.get<Recipient>(`SELECT * FROM recipients WHERE id = ?`, [
+    mission.recipient_id,
+  ]);
+  const product = getProduct(mission.product_id);
+  if (!user || !recipient || !product) return;
+
+  await emailArrivingToday({
+    to: user.email,
+    firstName: firstNameOf(user),
+    gift: product.name,
+    recipient: recipient.name,
+    occasion: await occasionTitle(mission.occasion_id),
+    deliverOn: mission.deliver_on,
+    where: "",
   });
 }
 

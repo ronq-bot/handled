@@ -66,15 +66,19 @@ export default async function DashboardPage({
           <Link href="/dashboard/dates/new" className="btn btn-primary">
             Add a date
           </Link>
-          <form action={runDispatchAction}>
-            <button
-              type="submit"
-              className="btn btn-ghost"
-              title="Normally a cron job. Here's the button."
-            >
-              Run scheduler now
-            </button>
-          </form>
+          {/* A development affordance: the real scheduler is a cron, and the
+              action refuses in production, so the button hides there too. */}
+          {process.env.NODE_ENV !== "production" && (
+            <form action={runDispatchAction}>
+              <button
+                type="submit"
+                className="btn btn-ghost"
+                title="Normally a cron job. Here's the button."
+              >
+                Run scheduler now
+              </button>
+            </form>
+          )}
         </div>
       </div>
 

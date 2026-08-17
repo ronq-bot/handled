@@ -30,11 +30,19 @@ const SUGGESTIONS: { title: string; date?: string }[] = [
 
 let nextId = 1;
 
-/** "02-14" or "1998-02-14" → the next occurrence as a full date, else null. */
+/**
+ * "02-14" or "1998-02-14" → the next occurrence as a full date, else null.
+ * The round-trip check rejects phantom dates like "13-40" that the regex
+ * alone would let through — a score computed from a month that doesn't
+ * exist is worse than no score.
+ */
 function nextOccurrence(raw: string, from: string): string | null {
   const mmdd = /^(\d{2})-(\d{2})$/.exec(raw.trim());
   const full = mmdd ? `2000-${mmdd[1]}-${mmdd[2]}` : raw.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(full)) return null;
+  const [y, m, d] = full.split("-").map(Number);
+  const check = new Date(Date.UTC(y, m - 1, d));
+  if (check.getUTCMonth() !== m - 1 || check.getUTCDate() !== d) return null;
   return nextAnniversary(full, from);
 }
 
@@ -45,8 +53,12 @@ export function RiskQuiz() {
 
   const from = today();
 
-  const add = (title: string, date = "") =>
-    setDates((d) => [...d, { id: nextId++, title, date, covered: false }]);
+  const add = (title: string, date = "") => {
+    // Minted outside the updater — updaters must stay pure, and React may
+    // replay them, which would give the same row a new identity.
+    const id = nextId++;
+    setDates((d) => [...d, { id, title, date, covered: false }]);
+  };
 
   const update = (id: number, patch: Partial<QuizDate>) =>
     setDates((d) => d.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -122,13 +134,21 @@ export function RiskQuiz() {
                   value={row.title}
                   onChange={(e) => update(row.id, { title: e.target.value })}
                 />
-                <input
-                  aria-label="When is it (month and day)"
-                  className="field"
-                  placeholder="MM-DD"
-                  value={row.date}
-                  onChange={(e) => update(row.id, { date: e.target.value })}
-                />
+                <div>
+                  <input
+                    aria-label="When is it (month and day)"
+                    className="field"
+                    placeholder="MM-DD"
+                    value={row.date}
+                    onChange={(e) => update(row.id, { date: e.target.value })}
+                  />
+                  {/* A row we can't read silently wouldn't count — say so. */}
+                  {row.date.trim() !== "" && nextOccurrence(row.date, from) === null && (
+                    <p className="mt-1 text-xs text-claret">
+                      Write it as MM-DD, like 08-24 — this one isn&apos;t counting yet.
+                    </p>
+                  )}
+                </div>
                 <label className="flex items-center gap-2 text-[0.8125rem] text-muted">
                   <input
                     type="checkbox"

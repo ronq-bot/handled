@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { currentUser } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { SESSION_COOKIE } from "@/lib/auth";
 import { MarketingHeader, SiteFooter } from "@/components/site-chrome";
 import { YearLedger } from "@/components/year-ledger";
 import { Reveal } from "@/components/reveal";
@@ -59,7 +60,10 @@ const STEPS = [
 ];
 
 export default async function LandingPage() {
-  const user = await currentUser();
+  // The header only needs "probably signed in" for its nav button — cookie
+  // presence is enough, and it keeps the highest-traffic page off the
+  // database entirely (the dashboard re-validates for real).
+  const signedIn = (await cookies()).has(SESSION_COOKIE);
   const catalogue = CATALOGUE_IDS.map((id) => PRODUCTS.find((p) => p.id === id)).filter(
     (p) => p !== undefined,
   );
@@ -70,7 +74,7 @@ export default async function LandingPage() {
       <a href="#main" className="skip-link">
         Skip to content
       </a>
-      <MarketingHeader signedIn={Boolean(user)} />
+      <MarketingHeader signedIn={signedIn} />
 
       <main id="main" className="flex-1">
         {/* ── Hero ────────────────────────────────────────────── */}

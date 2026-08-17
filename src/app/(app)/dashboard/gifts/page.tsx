@@ -36,11 +36,13 @@ export default async function GiftsPage() {
         title="Scheduled gifts"
         subtitle="Everything queued, in flight, or already landed."
         action={
-          <form action={runDispatchAction}>
-            <button type="submit" className="btn btn-ghost">
-              Run scheduler now
-            </button>
-          </form>
+          process.env.NODE_ENV !== "production" ? (
+            <form action={runDispatchAction}>
+              <button type="submit" className="btn btn-ghost">
+                Run scheduler now
+              </button>
+            </form>
+          ) : undefined
         }
       />
 

@@ -114,7 +114,9 @@ CREATE TABLE IF NOT EXISTS missions (
   updated_at       TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_missions_user ON missions(user_id);
-CREATE INDEX IF NOT EXISTS idx_missions_ship ON missions(ship_on, status);
+CREATE INDEX IF NOT EXISTS idx_missions_status_ship ON missions(status, ship_on);
+CREATE INDEX IF NOT EXISTS idx_missions_status_deliver ON missions(status, deliver_on);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 
 CREATE TABLE IF NOT EXISTS mission_events (
   id         TEXT PRIMARY KEY,
@@ -151,6 +153,15 @@ const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
   ["missions", "affiliate_cents", "INTEGER NOT NULL DEFAULT 0"],
 ];
 
+/**
+ * Indexes replaced since the first release. The dispatcher's queries all put
+ * equality on `status` and a range on a date, so the old `(ship_on, status)`
+ * index scanned every mission ever completed on every hourly run; the
+ * status-first pair above scans only the rows actually due. Dropping is
+ * idempotent on both engines.
+ */
+const DROPPED_INDEXES = ["idx_missions_ship"];
+
 /* ── SQLite ─────────────────────────────────────────────────────── */
 
 async function openSqlite(): Promise<Database> {
@@ -179,6 +190,7 @@ async function openSqlite(): Promise<Database> {
       handle.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
     }
   }
+  for (const index of DROPPED_INDEXES) handle.exec(`DROP INDEX IF EXISTS ${index}`);
 
   return {
     dialect: "sqlite",
@@ -208,6 +220,14 @@ export function toPositional(sql: string): string {
   for (let i = 0; i < sql.length; i += 1) {
     const char = sql[i];
     if (char === "'") {
+      // A doubled quote inside a literal is SQL's escaped quote, not the end
+      // of the string — without this, a `?` later in `'It''s here?'` would be
+      // rewritten and shift every parameter after it.
+      if (inString && sql[i + 1] === "'") {
+        out += "''";
+        i += 1;
+        continue;
+      }
       inString = !inString;
       out += char;
     } else if (char === "?" && !inString) {
@@ -221,16 +241,20 @@ export function toPositional(sql: string): string {
 }
 
 /**
- * Hosted providers (Neon, Supabase, RDS) require TLS and terminate it with
- * their own CA; a local Postgres usually has no TLS at all. An explicit
- * `sslmode` in the URL always wins — that's the user telling us directly.
+ * Hosted providers (Neon, Supabase, RDS) require TLS and present certificates
+ * signed by public CAs, so we VERIFY by default — this connection carries
+ * password hashes, session ids and addresses, and an unverified handshake
+ * accepts any middlebox pretending to be the database. A local Postgres
+ * usually has no TLS at all. An explicit `sslmode` in the URL always wins —
+ * that's the user telling us directly (use `sslmode=no-verify` for the rare
+ * provider with a self-signed chain).
  */
 export function sslFor(url: string): false | { rejectUnauthorized: boolean } | undefined {
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return { rejectUnauthorized: false };
+    return { rejectUnauthorized: true };
   }
 
   if (parsed.searchParams.has("sslmode")) return undefined;
@@ -243,7 +267,7 @@ export function sslFor(url: string): false | { rejectUnauthorized: boolean } | u
     host === "[::1]" ||
     host.endsWith(".local");
 
-  return isLocal ? false : { rejectUnauthorized: false };
+  return isLocal ? false : { rejectUnauthorized: true };
 }
 
 async function openPostgres(url: string): Promise<Database> {
@@ -255,9 +279,20 @@ async function openPostgres(url: string): Promise<Database> {
     max: 5,
   });
 
-  await pool.query(SCHEMA);
-  for (const [table, column, definition] of ADDED_COLUMNS) {
-    await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${definition}`);
+  // The schema is idempotent, but running seven CREATEs plus the column
+  // migrations adds a stack of sequential round trips to every serverless
+  // cold start. Probe for the newest schema artifact instead: present means
+  // the schema is current and one round trip replaces them all. (Point the
+  // sentinel at whatever the latest migration creates.)
+  const probe = await pool.query(
+    `SELECT 1 FROM pg_indexes WHERE indexname = 'idx_missions_status_deliver'`,
+  );
+  if (probe.rows.length === 0) {
+    await pool.query(SCHEMA);
+    for (const [t, c, definition] of ADDED_COLUMNS) {
+      await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS ${c} ${definition}`);
+    }
+    for (const index of DROPPED_INDEXES) await pool.query(`DROP INDEX IF EXISTS ${index}`);
   }
 
   return {

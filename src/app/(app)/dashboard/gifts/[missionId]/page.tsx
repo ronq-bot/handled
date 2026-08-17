@@ -30,10 +30,12 @@ export default async function MissionPage({
 
   const product = getProduct(mission.product_id);
   const vendor = product ? getVendor(product.vendorId) : undefined;
-  const recipient = await getRecipient(user.id, mission.recipient_id);
-  const address = await getAddress(user.id, mission.address_id);
-  const occasion = await getOccasion(user.id, mission.occasion_id);
-  const events = await listMissionEvents(mission.id);
+  const [recipient, address, occasion, events] = await Promise.all([
+    getRecipient(user.id, mission.recipient_id),
+    getAddress(user.id, mission.address_id),
+    getOccasion(user.id, mission.occasion_id),
+    listMissionEvents(mission.id),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -116,11 +118,17 @@ export default async function MissionPage({
             <form action={retryMissionAction}>
               <input type="hidden" name="id" value={mission.id} />
               <button type="submit" className="btn btn-primary">
-                Rescue this with a replacement
+                {/* An existing vendor order means only the payment failed —
+                    the retry fixes the money, it doesn't order twice. */}
+                {mission.vendor_order_ref
+                  ? "Retry the payment"
+                  : "Rescue this with a replacement"}
               </button>
             </form>
           )}
-          {["scheduled", "placed"].includes(mission.status) && (
+          {/* Only a gift that hasn't been ordered can honestly be called
+              off — a placed order is already paid for and moving. */}
+          {["scheduled", "failed"].includes(mission.status) && (
             <form action={cancelMissionAction}>
               <input type="hidden" name="id" value={mission.id} />
               <button type="submit" className="btn btn-ghost text-muted">

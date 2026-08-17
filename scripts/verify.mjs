@@ -355,6 +355,33 @@ const status = async (id) => (await db.get(`SELECT status FROM missions WHERE id
 }
 
 {
+  // A scheduled mission already carrying a vendor reference is a previous run
+  // that ordered and then died before recording the charge. The replay must
+  // reuse that order, never place a second one.
+  const id = await seed();
+  await db.run(`UPDATE missions SET vendor_id = 'petal_post', vendor_order_ref = 'PREV-REF' WHERE id = ?`, [id]);
+  await runDispatch("2026-08-18");
+  const row = await db.get(`SELECT status, vendor_order_ref FROM missions WHERE id = ?`, [id]);
+  assert.equal(row.status, "placed");
+  assert.equal(row.vendor_order_ref, "PREV-REF", "the existing vendor order must be kept, not re-placed");
+  passed += 1;
+  console.log("  ok  a replay after a crash reuses the existing vendor order instead of ordering twice");
+}
+
+{
+  // The user locked in a price at scheduling time; that is the price charged,
+  // even if the catalogue has been re-synced to a different number since.
+  const id = await seed();
+  await db.run(`UPDATE missions SET price_cents = 6100 WHERE id = ?`, [id]);
+  await runDispatch("2026-08-18");
+  const row = await db.get(`SELECT status, price_cents FROM missions WHERE id = ?`, [id]);
+  assert.equal(row.status, "placed");
+  assert.equal(row.price_cents, 6100, "the charge must honour the scheduled price");
+  passed += 1;
+  console.log("  ok  the price the user locked in is the price that is charged");
+}
+
+{
   const id = await seed();
   await runDispatch("2026-08-18");
   await runDispatch("2026-08-20");
@@ -530,11 +557,13 @@ check("the driver matches whether DATABASE_URL is set", () => {
   assert.equal(db.dialect, process.env.DATABASE_URL ? "postgres" : "sqlite");
 });
 
-check("TLS is off for a local Postgres and relaxed for a hosted one", () => {
+check("TLS is off for a local Postgres and VERIFIED for a hosted one", () => {
   assert.equal(sslFor("postgresql://u@localhost:5432/db"), false);
   assert.equal(sslFor("postgresql://u@127.0.0.1:5432/db"), false);
   assert.equal(sslFor("postgresql://u@[::1]:5432/db"), false);
-  assert.deepEqual(sslFor("postgresql://u:p@ep-x.neon.tech/db"), { rejectUnauthorized: false });
+  // This connection carries password hashes and session ids: hosted means
+  // certificate verification ON, never rejectUnauthorized: false.
+  assert.deepEqual(sslFor("postgresql://u:p@ep-x.neon.tech/db"), { rejectUnauthorized: true });
 });
 
 check("an explicit sslmode in the URL is left for pg to honour", () => {
@@ -550,6 +579,13 @@ check("placeholders convert to Postgres positional form", () => {
 check("a question mark inside a string literal is left alone", () => {
   assert.equal(toPositional("SELECT * FROM t WHERE note = 'why?' AND id = ?"),
                "SELECT * FROM t WHERE note = 'why?' AND id = $1");
+});
+
+check("an escaped quote does not end the literal", () => {
+  // '' inside a string is SQL's escaped quote — the old translator flipped
+  // its in-string flag on each one, so a ? later in the literal got numbered.
+  assert.equal(toPositional("SELECT * FROM t WHERE note = 'It''s here?' AND id = ?"),
+               "SELECT * FROM t WHERE note = 'It''s here?' AND id = $1");
 });
 
 check("conversion is stable across many parameters", () => {

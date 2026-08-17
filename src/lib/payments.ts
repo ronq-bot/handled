@@ -1,5 +1,5 @@
 import "server-only";
-import { env } from "./env";
+import { env, realMoneyVendorConfigured } from "./env";
 import { getDb, nowIso } from "./db";
 import type { User } from "./types";
 
@@ -54,9 +54,17 @@ export function paymentsAreLive(): boolean {
   return Boolean(env.stripeSecretKey);
 }
 
-/** True when this user can actually be charged. Falls back to the local flag. */
+/**
+ * True when this user can actually be charged. Falls back to the local flag —
+ * but never when a configured vendor spends real money: the checkbox stand-in
+ * would then place real orders nobody paid for, so it refuses until Stripe is
+ * wired up.
+ */
 export function userCanBeCharged(user: User): boolean {
-  if (!paymentsAreLive()) return user.payment_ok === 1;
+  if (!paymentsAreLive()) {
+    if (realMoneyVendorConfigured()) return false;
+    return user.payment_ok === 1;
+  }
   return Boolean(user.stripe_payment_method_id);
 }
 
@@ -92,14 +100,25 @@ export async function startCardSetup(user: User): Promise<StripeResult<string>> 
   return { ok: true, data: session.data.url };
 }
 
-/** Called on return from Checkout — persists the payment method it created. */
-export async function completeCardSetup(sessionId: string): Promise<StripeResult<string>> {
+/**
+ * Called on return from Checkout — persists the payment method it created.
+ * The session must belong to the signed-in user's Stripe customer: the
+ * session id arrives as a query parameter, and a card should only ever land
+ * on the account that started the setup.
+ */
+export async function completeCardSetup(
+  sessionId: string,
+  user: User,
+): Promise<StripeResult<string>> {
   const session = await stripe<{ setup_intent: string; customer: string }>(
     `/checkout/sessions/${encodeURIComponent(sessionId)}`,
     undefined,
     "GET",
   );
   if (!session.ok) return session;
+  if (!user.stripe_customer_id || session.data.customer !== user.stripe_customer_id) {
+    return { ok: false, error: "This checkout session does not belong to your account." };
+  }
 
   const intent = await stripe<{ payment_method: string; status: string }>(
     `/setup_intents/${encodeURIComponent(session.data.setup_intent)}`,
@@ -140,19 +159,28 @@ export type ChargeResult =
   | { ok: false; reason: string };
 
 /**
- * Charge for one shipment, off-session. The mission id is sent as Stripe's
- * `Idempotency-Key`, so if the process dies between the charge succeeding and
- * the mission being marked placed, the next dispatcher run replays the same
- * intent instead of creating a second charge. (Stripe holds a key for 24
- * hours — exactly the window in which an hourly cron would retry.)
+ * Charge for one shipment, off-session. The mission id plus an attempt
+ * counter is sent as Stripe's `Idempotency-Key`: a crashed run replaying the
+ * SAME attempt gets the same key, so it can never double-charge — while a
+ * genuine retry after a decline (which recorded a failure, bumping the
+ * counter) gets a fresh key instead of Stripe replaying the old decline for
+ * 24 hours.
  */
 export async function chargeForMission(
   user: User,
   missionId: string,
   amountCents: number,
   description: string,
+  attempt = 0,
 ): Promise<ChargeResult> {
   if (!paymentsAreLive()) {
+    if (realMoneyVendorConfigured()) {
+      return {
+        ok: false,
+        reason:
+          "A live vendor is configured but Stripe is not — refusing to simulate payment for a real order. Set STRIPE_SECRET_KEY.",
+      };
+    }
     return user.payment_ok === 1
       ? { ok: true, reference: `local-${missionId}` }
       : { ok: false, reason: "No payment method on file — we couldn't place the order." };
@@ -175,7 +203,7 @@ export async function chargeForMission(
       "metadata[mission_id]": missionId,
     },
     "POST",
-    `mission-charge-${missionId}`,
+    `mission-charge-${missionId}-a${attempt}`,
   );
 
   if (!intent.ok) return { ok: false, reason: `Card declined: ${intent.error}` };
