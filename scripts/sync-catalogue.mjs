@@ -16,6 +16,16 @@ import path from "node:path";
 const { register } = await import("node:module");
 register("./ts-loader.mjs", import.meta.url);
 
+// Load .env.local the same way Next does, so the script sees the same keys.
+try {
+  for (const line of fs.readFileSync(new URL("../.env.local", import.meta.url), "utf8").split("\n")) {
+    const match = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
+    if (match && process.env[match[1]] === undefined) process.env[match[1]] = match[2];
+  }
+} catch {
+  /* no .env.local — rely on the environment */
+}
+
 const { syncAll, toOverlay } = await import("../src/lib/catalogue-sync.ts");
 
 const reports = await syncAll();

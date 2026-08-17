@@ -119,7 +119,9 @@ type OrderBatchResponse = {
   id?: string;
   send_status?: string;
   orders_preview?: { id?: string; status?: string }[];
-  error?: { message?: string };
+  // Their failures arrive both ways: {"error": "Payment method not found"}
+  // and {"error": {"message": "..."}}, depending on the endpoint.
+  error?: string | { message?: string };
   message?: string;
   errors?: unknown;
 };
@@ -160,7 +162,10 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
   const json = (await response.json().catch(() => ({}))) as T & OrderBatchResponse;
 
   if (!response.ok) {
-    const detail = json?.error?.message ?? json?.message ?? `HTTP ${response.status}`;
+    const detail =
+      (typeof json?.error === "string" ? json.error : json?.error?.message) ??
+      json?.message ??
+      `HTTP ${response.status}`;
     throw new Error(`Goody ${path}: ${detail}`);
   }
   return json as T;

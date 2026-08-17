@@ -206,8 +206,12 @@ const BASE_PRODUCTS: Product[] = [
     category: "plant",
     priceCents: 8600,
     emoji: "🪴",
-    // Lively Root white phalaenopsis
-    vendorSku: "6cf449a8-006b-42cf-bb35-9d66d4baeaba",
+    // Goody's sandbox serves a different catalogue from production, so the
+    // production ids first recorded here all 404 against it. Every Goody sku
+    // below is a sandbox-catalogue equivalent (nearest category and price);
+    // they must be remapped to production ids before going live.
+    // Sandbox: H.Bloom white single-stem orchid
+    vendorSku: "a1cf6154-bfa4-4f8b-8bfe-48e07c67387f",
     landedCostCents: 7739,
     goodFor: ["birthday", "just_because", "mothers_day"],
     tags: ["plant", "orchid", "long-lasting", "minimal"],
@@ -252,10 +256,9 @@ const BASE_PRODUCTS: Product[] = [
     category: "chocolate",
     priceCents: 10600,
     emoji: "🍬",
-    // Vosges 16-piece truffle box, Dark Chocolate
-    vendorSku: "95742200-f2b9-4f0b-8bab-363ce23fe6e7",
+    // Sandbox: Compartés 40-piece signature truffles
+    vendorSku: "d1afea0c-e333-43bd-b31b-916ceb65e09a",
     landedCostCents: 9587,
-    vendorVariants: ["6d24590a-1675-4e0c-9e4c-921d538d9e67"],
     goodFor: ["valentines", "birthday", "christmas", "apology", "just_because"],
     tags: ["chocolate", "truffles", "dark chocolate", "sweets"],
     allergens: ["dairy", "soy", "nuts"],
@@ -270,10 +273,9 @@ const BASE_PRODUCTS: Product[] = [
     category: "bakery",
     priceCents: 6400,
     emoji: "🍪",
-    // Cravory two-dozen assortment, Birthday Box
-    vendorSku: "aaee944f-a9d9-44b6-8c01-334852f4c21f",
+    // Sandbox: Milk Bar dozen assorted cookie tin
+    vendorSku: "3357e606-f0be-4f41-9783-55a8c639d5f3",
     landedCostCents: 5775,
-    vendorVariants: ["5e8d5317-69e7-4ee6-bffd-6bc67d377430"],
     goodFor: ["birthday", "christmas", "just_because"],
     tags: ["cookies", "baked", "sweets", "shareable"],
     allergens: ["dairy", "gluten", "eggs", "nuts"],
@@ -288,8 +290,8 @@ const BASE_PRODUCTS: Product[] = [
     category: "bakery",
     priceCents: 12800,
     emoji: "🎂",
-    // Caroline's Cakes specialty signature
-    vendorSku: "d8a8ee73-fbb1-483b-aedd-d493507453f5",
+    // Sandbox: Milk Bar six-inch birthday cake
+    vendorSku: "8cc93263-1c4a-4167-bc48-c56a90cfc184",
     landedCostCents: 11550,
     goodFor: ["birthday", "anniversary"],
     tags: ["cake", "birthday", "sweets", "shareable"],
@@ -334,8 +336,8 @@ const BASE_PRODUCTS: Product[] = [
     category: "spa",
     priceCents: 11200,
     emoji: "🛁",
-    // Oak Essentials Ritual Oil
-    vendorSku: "8977a8c0-cf24-43be-9be0-b26095a6e9a4",
+    // Sandbox: Valleybrink Road self-care spa bundle
+    vendorSku: "9610ab45-8e19-4481-b4d6-8a70c1fd02a5",
     landedCostCents: 10164,
     imageUrl: "/products/spa_ritual_box.jpg",
     goodFor: ["birthday", "mothers_day", "just_because", "apology"],
@@ -366,8 +368,9 @@ const BASE_PRODUCTS: Product[] = [
     category: "spa",
     priceCents: 19100,
     emoji: "🧣",
-    // Quince Mongolian cashmere throw
-    vendorSku: "1f1d47b7-9179-450e-a2ce-41dedb193cb3",
+    // Sandbox: Naked Cashmere Jones scarf, Ecru
+    vendorSku: "69557ece-aa9a-43fc-87ca-1d832af9af1f",
+    vendorVariants: ["7fecb390-c509-4168-a0ab-966a3cb248ee"],
     landedCostCents: 17325,
     goodFor: ["christmas", "birthday", "anniversary"],
     tags: ["cozy", "cashmere", "warm", "travel", "luxury"],
@@ -471,8 +474,8 @@ const BASE_PRODUCTS: Product[] = [
     category: "jewelry",
     priceCents: 30300,
     emoji: "💛",
-    // Aurate Gold Huggies
-    vendorSku: "147194f4-9cbd-439e-b7fe-97a829b62476",
+    // Sandbox: Mignonne Gavigan Emma Lux hoops
+    vendorSku: "5d1c3f04-8377-4d58-938d-79d830eeb7be",
     landedCostCents: 27489,
     goodFor: ["anniversary","valentines","birthday"],
     tags: ["jewelry","gold","earrings","everyday","classic"],
@@ -488,8 +491,8 @@ const BASE_PRODUCTS: Product[] = [
     category: "jewelry",
     priceCents: 37900,
     emoji: "💎",
-    // Aurate Diana studs
-    vendorSku: "1a596763-445d-4166-80e7-720a2fb33258",
+    // Sandbox: Mignonne Gavigan Spritz earrings — their sandbox lists no diamonds
+    vendorSku: "2e0c8a03-4d25-4277-b997-1c0b142c80a2",
     landedCostCents: 34419,
     goodFor: ["anniversary","valentines","birthday"],
     tags: ["jewelry","diamond","earrings","luxury","keepsake"],
@@ -505,8 +508,9 @@ const BASE_PRODUCTS: Product[] = [
     category: "jewelry",
     priceCents: 25500,
     emoji: "🤍",
-    // Nishi Pearls Silver Trace set
-    vendorSku: "0c756da8-9fed-4dc8-90b0-a2052cb73745",
+    // Sandbox: Yam Bonar pearl choker, White
+    vendorSku: "0f6db3a1-277b-4522-b28b-14b53216065e",
+    vendorVariants: ["3bbca24f-6c88-4a80-bc96-f732992ed427"],
     landedCostCents: 23100,
     goodFor: ["anniversary","birthday","mothers_day"],
     tags: ["jewelry","pearls","necklace","set","elegant"],
@@ -522,8 +526,8 @@ const BASE_PRODUCTS: Product[] = [
     category: "jewelry",
     priceCents: 10800,
     emoji: "✨",
-    // Ana Luisa Hayden
-    vendorSku: "0338ba4f-09a7-405d-a114-764673c9d387",
+    // Sandbox: MadeByKwest Everything Chain
+    vendorSku: "a10c05bc-e014-4e36-a2dc-052a959f2c49",
     landedCostCents: 9818,
     goodFor: ["birthday","valentines","just_because"],
     tags: ["jewelry","gold","necklace","everyday","chain"],
@@ -539,8 +543,9 @@ const BASE_PRODUCTS: Product[] = [
     category: "jewelry",
     priceCents: 41300,
     emoji: "👜",
-    // Marc Jacobs Dual Chain Mini, Blue Mist
-    vendorSku: "138cee58-e1d0-4156-9ea6-b7f9907d7c98",
+    // Sandbox: Parker Clay Deset woven crossbody, Black
+    vendorSku: "2b0e7e0c-93b7-40c0-8ac5-0acf5ab18742",
+    vendorVariants: ["39bc6095-4778-4a47-8904-31881ed4e94e"],
     landedCostCents: 37538,
     goodFor: ["anniversary","birthday","christmas"],
     tags: ["bag","designer","handbag","accessories","statement"],
@@ -556,9 +561,8 @@ const BASE_PRODUCTS: Product[] = [
     category: "jewelry",
     priceCents: 20500,
     emoji: "⌚",
-    // BREDA Esther, Gold/Silver
-    vendorSku: "0419f14d-7706-42b8-808c-c2a6009c923a",
-    vendorVariants: ["ce63518f-c1df-4c8e-8d7d-412bf4b3c580"],
+    // Sandbox: Mignonne Gavigan Positano Lemon earrings — their sandbox lists no watches
+    vendorSku: "558f17e9-983d-4d17-996f-75e985db0851",
     landedCostCents: 18596,
     goodFor: ["anniversary","birthday","christmas"],
     tags: ["watch","accessories","gold","timeless"],
@@ -574,8 +578,9 @@ const BASE_PRODUCTS: Product[] = [
     category: "spa",
     priceCents: 19000,
     emoji: "😴",
-    // Drowsy Crystals by Swarovski
-    vendorSku: "0e05d936-54d4-46da-a329-c88cf001f4ee",
+    // Sandbox: Blissy silk sleep mask, Champagne
+    vendorSku: "50e0f25d-2812-455e-bb4c-9569b1d58d20",
+    vendorVariants: ["0e8c6014-190a-43a6-ba3b-3e1f1be6be82"],
     landedCostCents: 17210,
     goodFor: ["birthday","mothers_day","just_because"],
     tags: ["silk","sleep","self care","luxury","spa"],
@@ -591,9 +596,9 @@ const BASE_PRODUCTS: Product[] = [
     category: "spa",
     priceCents: 35600,
     emoji: "🌙",
-    // Therabody Beauty Sleep Bundle, White
-    vendorSku: "10cd8617-1a8b-4537-913a-6f941a29a6cb",
-    vendorVariants: ["321f026f-8d62-4cb5-9e34-3b5c5f21e431"],
+    // Sandbox: Therabody TheraFace PRO, White
+    vendorSku: "8ac16b77-9d34-49a3-a57b-647410f2577d",
+    vendorVariants: ["4123d826-7249-40ba-b109-2753a0efbb5d"],
     landedCostCents: 32340,
     goodFor: ["birthday","mothers_day","anniversary","just_because"],
     tags: ["wellness","spa","sleep","massage","tech","self care"],
