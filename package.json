@@ -12,7 +12,8 @@
     "verify:both": "./scripts/verify-both.sh",
     "sync:catalogue": "node scripts/sync-catalogue.mjs",
     "margins": "node scripts/show-margins.mjs",
-    "earnings": "node scripts/show-earnings.mjs"
+    "earnings": "node scripts/show-earnings.mjs",
+    "test:vendors": "node scripts/test-vendors.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.1",

@@ -169,8 +169,91 @@ export async function syncGiftbit(): Promise<SyncReport> {
   };
 }
 
+/* ── Goody ──────────────────────────────────────────────────────
+   Half our catalogue ships through Goody, and each mapped product records
+   their catalogue id in `vendorSku`. Refreshing name, price and photography
+   from `GET /products/:id` keeps what the customer sees — and what we
+   charge — aligned with what Goody will actually send, and surfaces any
+   product they have withdrawn before an order fails on the day.
+   ─────────────────────────────────────────────────────────────── */
+
+const GOODY_VENDORS = new Set(["cocoa_line", "hearthside", "gilt_grace"]);
+
+type GoodyCatalogueProduct = {
+  id?: string;
+  name?: string;
+  subtitle?: string;
+  recipient_description?: string;
+  price?: number;
+  status?: string;
+  brand?: { name?: string };
+  images?: { image_large?: { url?: string }; image_small?: { url?: string }; url?: string }[];
+};
+
+export async function syncGoody(): Promise<SyncReport> {
+  const curated = PRODUCTS.filter((p) => GOODY_VENDORS.has(p.vendorId) && p.vendorSku);
+
+  if (!env.goodyApiKey) {
+    return {
+      partner: "Goody",
+      live: false,
+      fetched: 0,
+      matched: [],
+      note: `Would refresh ${curated.length} mapped curated products. Set GOODY_API_KEY (developer.ongoody.com — self-serve, free sandbox).`,
+    };
+  }
+
+  const host =
+    env.goodyEnv === "production" ? "https://api.ongoody.com/v1" : "https://api.sandbox.ongoody.com/v1";
+  const matched: SyncedProduct[] = [];
+  const gone: string[] = [];
+
+  for (const product of curated) {
+    const response = await fetch(`${host}/products/${encodeURIComponent(product.vendorSku!)}`, {
+      headers: { Authorization: `Bearer ${env.goodyApiKey}`, Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (response.status === 404) {
+      gone.push(product.id);
+      continue;
+    }
+    if (!response.ok) throw new Error(`Goody products/${product.vendorSku} returned ${response.status}`);
+
+    const theirs = (await response.json()) as GoodyCatalogueProduct;
+    if (theirs.status && theirs.status !== "active") {
+      gone.push(product.id);
+      continue;
+    }
+
+    const image = theirs.images?.[0];
+    matched.push({
+      id: product.id,
+      vendorSku: product.vendorSku,
+      imageUrl: image?.image_large?.url ?? image?.url ?? image?.image_small?.url,
+      imageSource: "ongoody.com",
+      name: theirs.name,
+      priceCents: typeof theirs.price === "number" ? theirs.price : undefined,
+      blurb: theirs.recipient_description?.trim() || theirs.subtitle?.trim() || undefined,
+    });
+  }
+
+  return {
+    partner: "Goody",
+    live: true,
+    fetched: curated.length,
+    matched,
+    note:
+      `Refreshed ${matched.length} of ${curated.length} mapped curated products.` +
+      (gone.length
+        ? ` WITHDRAWN OR MISSING at Goody — fix before their dates arrive: ${gone.join(", ")}.`
+        : ""),
+  };
+}
+
 export async function syncAll(): Promise<SyncReport[]> {
-  return Promise.all([syncFloristOne(), syncGiftbit()]);
+  return Promise.all([syncFloristOne(), syncGiftbit(), syncGoody()]);
 }
 
 export type OverlayEntry = Partial<
