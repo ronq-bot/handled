@@ -8,15 +8,21 @@
 - **14 of 14 mapped Goody products are orderable today** — credentials accepted, every
   mapped sku pre-flights clean (active, cart-eligible, fixed price, no state
   restrictions, variants resolved).
-- **No sandbox order was placed.** The adapter ran the full order path and Goody
-  refused the final `POST /order_batches` with `Payment method not found`: this
-  sandbox account has **no payment method and no stored value**, and the API has no
-  endpoint to add either. **Human decision needed:** either add a test card in the
-  sandbox dashboard (sandbox.ongoody.com, needs the account login — the API key
-  alone can't do it) or email support@ongoody.com to load sandbox stored value,
-  then re-run `npm run test:vendors -- --order-goody`. Everything up to payment —
-  auth, pre-flight, variant resolution, card lookup, batch construction — worked
-  against the live sandbox.
+- **A sandbox order WAS placed** (second run, after a test card was added to the
+  sandbox account through the dashboard — the first attempt was refused with
+  `Payment method not found` because the account had no payment method, which the
+  API cannot add on its own). The full production pipeline ran end to end:
+  auth → pre-flight → variant resolution → card lookup → order batch → payment.
+
+  | | |
+  |---|---|
+  | Order | `4676c93e-89a5-4de0-bfc0-4ae4c24060b6` — status `created` |
+  | Batch | `f4a708ab-4910-4947-ac8a-df9593ffb86f` — send_status `complete` |
+  | Item | 40 Piece Signature Truffles Gift Set, charged $106.00 to Visa ····4242 |
+  | Card + message | attached and carried (`from` name, gift message, card design) |
+
+- **All 14 products' real photography and prices synced** — `npm run sync:catalogue`
+  wrote 14 overlay entries, every one with the partner's own photo.
 - **The production skus all 404 in the sandbox** (expected — Goody's sandbox serves a
   different catalogue). All 14 mapped products in `src/lib/catalog.ts` were remapped
   to sandbox equivalents by category and nearest price; the original production ids
