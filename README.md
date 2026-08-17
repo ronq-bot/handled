@@ -77,6 +77,27 @@ Other knobs: `HANDLED_DATA_DIR` (SQLite location, default `./.data`),
 
 `vercel.json` already schedules the dispatcher hourly.
 
+### Test-driving the partners
+
+```bash
+npm run test:vendors                # read-only: proves credentials, lists what's orderable
+npm run test:vendors -- --order-goody   # + places ONE sandbox order through the real adapter
+```
+
+Get the keys first — both go in `.env.local`:
+
+- **Goody** — [developer.ongoody.com](https://developer.ongoody.com): self-serve, free, instant.
+  The key it gives you starts in the **sandbox**, where orders are real API calls but nothing
+  ships and nothing is charged — exactly what a test wants. `--order-goody` refuses to run
+  against production.
+- **Florist One** — [floristone.com/api](https://www.floristone.com/api/): apply for API
+  credentials. **There is no sandbox** — every order is a real bouquet and a real charge — so
+  the script never orders flowers. Its test is the one the product rests on anyway: authenticate,
+  read their catalogue, and confirm the exact dates their florist network can serve for a ZIP.
+
+Everything the test marks orderable can then get its real photography and prices pulled in with
+`npm run sync:catalogue` (now covers Goody as well as Florist One and Giftbit).
+
 ### Real product photography
 
 ```bash
