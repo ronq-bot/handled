@@ -1,11 +1,14 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { getDb, newId, nowIso } from "./db";
 import type { User } from "./types";
 
-const COOKIE = "alpha_session";
+/** Exported so a page can check for the cookie's presence without a DB hit. */
+export const SESSION_COOKIE = "alpha_session";
+const COOKIE = SESSION_COOKIE;
 const SESSION_DAYS = 30;
 
 export function hashPassword(password: string): string {
@@ -70,7 +73,12 @@ export async function endSession(): Promise<void> {
   jar.delete(COOKIE);
 }
 
-export async function currentUser(): Promise<User | null> {
+/**
+ * Request-scoped via React's cache(): the layout, the page inside it, and any
+ * helper in the same render all call this, and each duplicate call used to be
+ * another session-join round trip to the database.
+ */
+export const currentUser = cache(async (): Promise<User | null> => {
   const jar = await cookies();
   const id = jar.get(COOKIE)?.value;
   if (!id) return null;
@@ -83,7 +91,7 @@ export async function currentUser(): Promise<User | null> {
   );
 
   return row ?? null;
-}
+});
 
 /** For pages and actions that must not run for a signed-out visitor. */
 export async function requireUser(): Promise<User> {

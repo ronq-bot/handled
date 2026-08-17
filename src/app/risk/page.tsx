@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { currentUser } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { SESSION_COOKIE } from "@/lib/auth";
 import { MarketingHeader, SiteFooter } from "@/components/site-chrome";
 import { RiskQuiz } from "./risk-quiz";
 
@@ -17,11 +18,11 @@ export const metadata: Metadata = {
  * clothes, not a gimmick with a made-up number.
  */
 export default async function RiskPage() {
-  const user = await currentUser();
+  const signedIn = (await cookies()).has(SESSION_COOKIE);
 
   return (
     <>
-      <MarketingHeader signedIn={Boolean(user)} />
+      <MarketingHeader signedIn={signedIn} />
 
       <main className="section">
         <div className="container-tight">

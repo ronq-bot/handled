@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useRef, useTransition } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import type { Address } from "@/lib/types";
 import { formatTime } from "@/lib/date";
 
@@ -31,6 +31,14 @@ export function PlannerControls({
   const [pending, startTransition] = useTransition();
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // An orphaned timer would navigate back to this page after the user left
+  // it — clear it on unmount.
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
   function set(key: string, value: string) {
     const next = new URLSearchParams(searchParams.toString());
     if (value) next.set(key, value);
@@ -38,10 +46,20 @@ export function PlannerControls({
     startTransition(() => router.replace(`${pathname}?${next.toString()}`, { scroll: false }));
   }
 
-  /** The search re-renders the grid on the server; don't do it per keystroke. */
+  /**
+   * The search re-renders the grid on the server; don't do it per keystroke.
+   * When the timer fires it reads the URL as it is THEN — building from this
+   * render's searchParams would resurrect a budget or address the user
+   * changed during the 300ms window.
+   */
   function setSearch(value: string) {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => set("q", value), 300);
+    searchTimer.current = setTimeout(() => {
+      const next = new URLSearchParams(window.location.search);
+      if (value) next.set("q", value);
+      else next.delete("q");
+      startTransition(() => router.replace(`${pathname}?${next.toString()}`, { scroll: false }));
+    }, 300);
   }
 
   return (

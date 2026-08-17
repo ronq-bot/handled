@@ -16,15 +16,29 @@ import {
   logMissionEvent,
   recentProductIds,
 } from "@/lib/queries";
-import { addDays, nextAnniversary, today } from "@/lib/date";
+import { addDays, fromUtc, nextAnniversary, today, toUtc } from "@/lib/date";
 import { runDispatch } from "@/lib/dispatcher";
-import { removeCard } from "@/lib/payments";
+import { paymentsAreLive, removeCard } from "@/lib/payments";
 import type { AddressKind, OccasionKind } from "@/lib/types";
 
 const s = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 
 function refreshApp() {
   revalidatePath("/dashboard", "layout");
+}
+
+/**
+ * `next` comes from a form field, and `redirect()` will happily follow an
+ * absolute URL — keep it inside the app so the field can never become an
+ * open redirect.
+ */
+function safePath(next: string): string {
+  return next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+}
+
+/** A real YYYY-MM-DD on the actual calendar — "2026-13-40" round-trips false. */
+function isCalendarDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && fromUtc(toUtc(value)) === value;
 }
 
 /* ── People ─────────────────────────────────────────────────── */
@@ -47,7 +61,7 @@ export async function createRecipientAction(formData: FormData): Promise<void> {
 
   refreshApp();
   const next = s(formData, "next");
-  if (next) redirect(next.replace("{id}", id));
+  if (next) redirect(safePath(next.replace("{id}", id)));
 }
 
 export async function updateRecipientAction(formData: FormData): Promise<void> {
@@ -71,7 +85,16 @@ export async function updateRecipientAction(formData: FormData): Promise<void> {
 export async function deleteRecipientAction(formData: FormData): Promise<void> {
   const user = await requireUser();
   const db = await getDb();
-  await db.run(`DELETE FROM recipients WHERE id = ? AND user_id = ?`, [s(formData, "id"), user.id]);
+  const id = s(formData, "id");
+  // Deleting cascades into missions — refuse while any gift is in flight,
+  // because a placed order is a financial record, not clutter.
+  const inFlight = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM missions
+     WHERE recipient_id = ? AND user_id = ? AND status IN ('scheduled', 'placed', 'shipped')`,
+    [id, user.id],
+  );
+  if (Number(inFlight?.n ?? 0) > 0) return;
+  await db.run(`DELETE FROM recipients WHERE id = ? AND user_id = ?`, [id, user.id]);
   refreshApp();
 }
 
@@ -108,7 +131,7 @@ export async function createAddressAction(formData: FormData): Promise<void> {
 
   refreshApp();
   const next = s(formData, "next");
-  if (next) redirect(next);
+  if (next) redirect(safePath(next));
 }
 
 export async function updateAddressAction(formData: FormData): Promise<void> {
@@ -156,25 +179,39 @@ export async function createOccasionAction(formData: FormData): Promise<void> {
   const kind = (s(formData, "kind") || "birthday") as OccasionKind;
   const id = newId("occ");
 
+  // The date input guards the happy path, but a server action is a public
+  // POST endpoint — a malformed date stored here would make every page that
+  // computes the next occurrence throw, bricking the whole dashboard.
+  const eventDate = s(formData, "event_date") || today();
+  if (!isCalendarDate(eventDate)) return;
+
   await db.run(`INSERT INTO occasions (id, user_id, recipient_id, kind, title, event_date, recurring, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [id,
     user.id,
     recipientId,
     kind,
     s(formData, "title") || defaultTitle(kind),
-    s(formData, "event_date") || today(),
+    eventDate,
     formData.get("recurring") ? 1 : 0,
     nowIso(),]);
 
   refreshApp();
   const next = s(formData, "next");
-  redirect(next ? next.replace("{id}", id) : `/dashboard/plan/${id}`);
+  redirect(next ? safePath(next.replace("{id}", id)) : `/dashboard/plan/${id}`);
 }
 
 export async function deleteOccasionAction(formData: FormData): Promise<void> {
   const user = await requireUser();
   const db = await getDb();
-  await db.run(`DELETE FROM occasions WHERE id = ? AND user_id = ?`, [s(formData, "id"), user.id]);
+  const id = s(formData, "id");
+  // Same rule as recipients: the cascade must never eat an in-flight order.
+  const inFlight = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM missions
+     WHERE occasion_id = ? AND user_id = ? AND status IN ('scheduled', 'placed', 'shipped')`,
+    [id, user.id],
+  );
+  if (Number(inFlight?.n ?? 0) > 0) return;
+  await db.run(`DELETE FROM occasions WHERE id = ? AND user_id = ?`, [id, user.id]);
   refreshApp();
 }
 
@@ -206,14 +243,23 @@ export async function scheduleMissionAction(formData: FormData): Promise<void> {
   const address = await getAddress(user.id, addressId);
   if (!address) return;
 
-  const budgetCents = Math.max(1000, Number(s(formData, "budget") || "80") * 100);
+  // Number() of garbage is NaN, and NaN survives Math.max — round and fall
+  // back so a hand-made request can neither crash the insert nor store a
+  // fractional cent (Postgres refuses a REAL in an INTEGER column).
+  const rawBudget = Number(s(formData, "budget") || "80");
+  const budgetCents = Math.max(1000, Number.isFinite(rawBudget) ? Math.round(rawBudget * 100) : 8000);
   const mode = s(formData, "selection_mode") === "auto" ? "auto" : "manual";
   const eventDate = occasion.recurring
     ? nextAnniversary(occasion.event_date, today())
     : occasion.event_date;
 
   let productId = s(formData, "product_id");
-  if (mode === "auto" || !productId) {
+  // In manual mode the user is choosing with their own eyes — a submission
+  // with no product means the grid was empty (a search with no matches);
+  // silently substituting an Auto-Pilot pick they never saw is worse than
+  // doing nothing.
+  if (mode === "manual" && !productId) return;
+  if (mode === "auto") {
     const recipient = await getRecipient(user.id, occasion.recipient_id);
     if (!recipient) return;
     const pick = autoPick({
@@ -276,11 +322,19 @@ export async function cancelMissionAction(formData: FormData): Promise<void> {
   const db = await getDb();
   const id = s(formData, "id");
   const mission = await getMission(user.id, id);
-  if (!mission || mission.status === "delivered") return;
+  // Only a gift that hasn't been ordered can honestly be called off. A
+  // 'placed' order has a live vendor order and a captured charge — flipping
+  // the status would keep the money and ship the gift anyway; until vendor
+  // cancellation and refunds exist, we refuse rather than pretend.
+  if (!mission || !["scheduled", "failed"].includes(mission.status)) return;
 
-  await db.run(`UPDATE missions SET status = 'canceled', updated_at = ? WHERE id = ? AND user_id = ?`, [nowIso(),
-    id,
-    user.id,]);
+  // Status-guarded so a dispatch run that grabbed this mission mid-flight
+  // and placed it does not get silently overwritten (nor vice versa).
+  await db.run(
+    `UPDATE missions SET status = 'canceled', updated_at = ?
+     WHERE id = ? AND user_id = ? AND status IN ('scheduled', 'failed')`,
+    [nowIso(), id, user.id],
+  );
   await logMissionEvent(id, "canceled", "You called it off.");
   refreshApp();
 }
@@ -292,6 +346,25 @@ export async function retryMissionAction(formData: FormData): Promise<void> {
   const id = s(formData, "id");
   const mission = await getMission(user.id, id);
   if (!mission || mission.status !== "failed") return;
+
+  // A failed mission that carries a vendor reference means the vendor took
+  // the order and only the charge failed — the gift is on its way. The right
+  // fix is the card, not a second gift: re-scheduling as-is lets the
+  // dispatcher retry the charge against the existing order.
+  if (mission.vendor_order_ref) {
+    await db.run(
+      `UPDATE missions SET status = 'scheduled', failure_reason = '', updated_at = ?
+       WHERE id = ? AND user_id = ? AND status = 'failed'`,
+      [nowIso(), id, user.id],
+    );
+    await logMissionEvent(
+      id,
+      "scheduled",
+      `Retrying payment for the existing order ${mission.vendor_order_ref} — not ordering twice.`,
+    );
+    refreshApp();
+    return;
+  }
 
   const recipient = await getRecipient(user.id, mission.recipient_id);
   const address = await getAddress(user.id, mission.address_id);
@@ -330,9 +403,16 @@ export async function retryMissionAction(formData: FormData): Promise<void> {
 export async function updateSettingsAction(formData: FormData): Promise<void> {
   const user = await requireUser();
   const db = await getDb();
+  // With Stripe live, payment_ok is owned by the card flow — a form field
+  // must not be able to assert "I have a card" when Stripe says otherwise.
+  const paymentOk = paymentsAreLive()
+    ? user.payment_ok
+    : formData.get("payment_ok")
+      ? 1
+      : 0;
   await db.run(`UPDATE users SET name = ?, auto_pilot = ?, payment_ok = ? WHERE id = ?`, [s(formData, "name") || user.name,
     formData.get("auto_pilot") ? 1 : 0,
-    formData.get("payment_ok") ? 1 : 0,
+    paymentOk,
     user.id,]);
   refreshApp();
 }
@@ -346,9 +426,15 @@ export async function removeCardAction(): Promise<void> {
 
 /* ── Ops ────────────────────────────────────────────────────── */
 
-/** Manually fire the scheduler. In production this is a cron, not a button. */
+/**
+ * Manually fire the scheduler — a development convenience. In production the
+ * cron owns this: the dispatcher processes EVERY account's due missions, and
+ * a tenant-scoped session must not decide when other customers' orders and
+ * charges fire.
+ */
 export async function runDispatchAction(): Promise<void> {
   await requireUser();
+  if (process.env.NODE_ENV === "production") return;
   await runDispatch();
   refreshApp();
 }
@@ -388,8 +474,8 @@ export async function seedDemoAction(): Promise<void> {
 
   await db.run(`UPDATE users SET payment_ok = 1 WHERE id = ?`, [user.id]);
 
-  scheduleSeeded(user.id, birthdayId, recipientId, workId, "bouquet_garden_seasonal", "Happy birthday. Yes, I remembered. — M");
-  scheduleSeeded(user.id, anniversaryId, recipientId, homeId, "fruit_bouquet_celebration", "Same time next year. — M");
+  await scheduleSeeded(user.id, birthdayId, recipientId, workId, "bouquet_garden_seasonal", "Happy birthday. Yes, I remembered. — M");
+  await scheduleSeeded(user.id, anniversaryId, recipientId, homeId, "fruit_bouquet_celebration", "Same time next year. — M");
 
   refreshApp();
   redirect("/dashboard?seeded=1");

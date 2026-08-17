@@ -71,6 +71,22 @@ export const env = {
   cronSecret: read("HANDLED_CRON_SECRET"),
 } as const;
 
+/**
+ * True when any configured vendor places orders that cost real money —
+ * Florist One has no sandbox at all, and the others cross over the moment
+ * their env flag says production. Used to refuse the "pretend a card is on
+ * file" stand-in: simulated payment against real fulfilment would ship
+ * gifts nobody paid for.
+ */
+export function realMoneyVendorConfigured(): boolean {
+  return (
+    Boolean(env.floristOneUser && env.floristOnePassword) ||
+    Boolean(env.goodyApiKey && env.goodyEnv === "production") ||
+    Boolean(env.giftbitApiKey && env.giftbitEnv === "production") ||
+    Boolean(env.printfulApiKey && env.printfulEnv === "production")
+  );
+}
+
 export type IntegrationKey =
   | "payments"
   | "email"
