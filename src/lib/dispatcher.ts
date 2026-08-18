@@ -108,6 +108,24 @@ export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchRepo
     }
   }
 
+  // Ask the vendors how in-flight orders are REALLY doing, where they can
+  // answer. A definite report beats the calendar: tracking links appear as
+  // soon as a parcel moves, and an order the vendor killed after accepting
+  // surfaces as a failure instead of being quietly marked delivered on
+  // schedule. Anything without a verdict falls through to the date-based
+  // transitions below.
+  const inFlight = await db.all<Mission>(
+    `SELECT * FROM missions WHERE status IN ('placed', 'shipped') AND vendor_order_ref != ''`,
+  );
+  for (const mission of inFlight) {
+    try {
+      await reconcileWithVendor(mission, report);
+    } catch (cause) {
+      // No verdict is not a failure — the date-based fallback keeps custody.
+      console.error(`dispatch: status check for ${mission.id} inconclusive`, cause);
+    }
+  }
+
   // Advance anything already in flight. Vendors normally push these via webhook;
   // date-based transitions keep the timeline honest without one.
   const toShip = await db.all<{ id: string }>(
@@ -147,6 +165,80 @@ export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchRepo
   }
 
   return report;
+}
+
+/**
+ * One in-flight mission checked against the vendor's own record. Conservative
+ * on purpose: only a positive verdict moves anything, and every move goes
+ * through the same status-guarded transitions the date-based path uses.
+ */
+async function reconcileWithVendor(mission: Mission, report: DispatchReport): Promise<void> {
+  const db = await getDb();
+  const product = getProduct(mission.product_id);
+  if (!product) return;
+
+  const adapter = await adapterFor(product.vendorId);
+  if (!adapter.orderStatus) return;
+
+  const verdict = await adapter.orderStatus(mission.vendor_order_ref);
+  if (!verdict) return;
+
+  if (verdict.trackingUrl && verdict.trackingUrl !== mission.tracking_url) {
+    await db.run(`UPDATE missions SET tracking_url = ?, updated_at = ? WHERE id = ?`, [
+      verdict.trackingUrl,
+      nowIso(),
+      mission.id,
+    ]);
+  }
+
+  if (verdict.status === "canceled") {
+    // The vendor accepted and then killed it. This is the one transition that
+    // must never be papered over by the calendar.
+    await db.run(
+      `UPDATE missions SET status = 'failed', failure_reason = ?, updated_at = ?
+       WHERE id = ? AND status IN ('placed', 'shipped')`,
+      [
+        "The supplier canceled this order after accepting it. Retry to send a replacement.",
+        nowIso(),
+        mission.id,
+      ],
+    );
+    await logMissionEvent(mission.id, "failed", "The supplier canceled the order after accepting it.");
+    const user = await db.get<User>(`SELECT * FROM users WHERE id = ?`, [mission.user_id]);
+    const recipient = await db.get<Recipient>(`SELECT * FROM recipients WHERE id = ?`, [
+      mission.recipient_id,
+    ]);
+    if (user && recipient) {
+      await notifyFailure(
+        user,
+        mission,
+        product,
+        recipient,
+        "The supplier canceled this order after accepting it.",
+      );
+    }
+    report.failed.push({ id: mission.id, reason: "Vendor canceled after acceptance" });
+    return;
+  }
+
+  if (verdict.status === "shipped" && mission.status === "placed") {
+    await setStatus(mission.id, "shipped");
+    await logMissionEvent(
+      mission.id,
+      "shipped",
+      verdict.trackingUrl ? `On its way — carrier tracking attached.` : "On its way, says the supplier.",
+    );
+    await notifyArriving(mission.id);
+    report.shipped.push(mission.id);
+  }
+
+  if (verdict.status === "delivered" && mission.status !== "delivered") {
+    if (mission.status === "placed") await setStatus(mission.id, "shipped");
+    await setStatus(mission.id, "delivered");
+    await logMissionEvent(mission.id, "delivered", "Delivered — confirmed by the supplier.");
+    await notifyDelivered(mission.id);
+    report.delivered.push(mission.id);
+  }
 }
 
 /** One mission through the gauntlet: guards, vendor, money, record. */

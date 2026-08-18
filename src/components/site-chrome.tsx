@@ -28,7 +28,38 @@ export function MarketingHeader({ signedIn }: { signedIn: boolean }) {
           ))}
         </nav>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 sm:gap-6">
+          {/* Below lg the section nav disappears; a no-JS disclosure menu
+              stands in, because a phone visitor with no menu has no site. */}
+          {/* No `relative` on the details: the panel anchors to the sticky
+              header instead, so it never hangs off the left edge of a phone. */}
+          <details className="lg:hidden">
+            <summary className="btn btn-ghost cursor-pointer list-none px-3 py-2 text-[0.6875rem] font-medium uppercase tracking-[0.2em] text-muted [&::-webkit-details-marker]:hidden">
+              Menu
+            </summary>
+            <nav
+              aria-label="Sections"
+              className="absolute right-4 top-full z-50 mt-1 w-56 rounded-xl border border-line bg-paper p-2 shadow-[0_18px_40px_-20px_rgba(34,32,28,0.35)]"
+            >
+              {[...SECTIONS, { href: "/risk", label: "Doghouse Risk Meter" }].map((s) => (
+                <a
+                  key={s.href}
+                  href={s.href}
+                  className="block rounded-lg px-4 py-2.5 text-[0.8125rem] text-muted transition-colors hover:bg-bone-2 hover:text-ink"
+                >
+                  {s.label}
+                </a>
+              ))}
+              {!signedIn && (
+                <Link
+                  href="/login"
+                  className="block rounded-lg px-4 py-2.5 text-[0.8125rem] text-muted transition-colors hover:bg-bone-2 hover:text-ink sm:hidden"
+                >
+                  Sign in
+                </Link>
+              )}
+            </nav>
+          </details>
           {signedIn ? (
             <Link href="/dashboard" className="btn btn-primary">
               My orders

@@ -20,6 +20,22 @@ export const metadata: Metadata = {
   title: "Handled — Never forget her birthday again",
   description:
     "A standing order for the dates that matter. Set them once; the right gift arrives on the day, at the right address, for the next twelve months.",
+  // Shared links should look deliberate: the hero photograph, the promise,
+  // and nothing that needs a marketing meeting to change.
+  openGraph: {
+    title: "Handled — Never forget her birthday again",
+    description:
+      "Set every important date once. The right gift arrives on the day, at the right address, for the next twelve months.",
+    type: "website",
+    images: [{ url: "/marketing/hero.jpg", width: 1600, height: 1075 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Handled — Never forget her birthday again",
+    description:
+      "Set every important date once. The right gift arrives on the day, at the right address, for the next twelve months.",
+    images: ["/marketing/hero.jpg"],
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

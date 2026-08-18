@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE } from "@/lib/auth";
@@ -124,11 +125,13 @@ export default async function LandingPage() {
 
           <div className="enter" style={{ animationDelay: "0.4s" }}>
             <div className="container-tight pb-20 md:pb-28">
-              <img
+              <Image
                 src="/marketing/hero.jpg"
                 alt="A hand-tied bouquet of roses beside a wrapped gift box and an open desk calendar"
                 width={1600}
                 height={1075}
+                priority
+                sizes="(min-width: 1024px) 60rem, 100vw"
                 className="w-full rounded-[--radius-lg] border border-line object-cover shadow-[0_30px_60px_-30px_rgba(34,32,28,0.35)]"
               />
             </div>
@@ -171,11 +174,12 @@ export default async function LandingPage() {
         {/* ── The moment it lands ─────────────────────────────── */}
         <section className="border-y border-line">
           <Reveal>
-            <img
+            <Image
               src="/marketing/lifestyle-desk.jpg"
               alt="Her hands untying the ribbon on a bouquet that arrived at her desk"
               width={1600}
               height={1073}
+              sizes="100vw"
               className="h-[26rem] w-full object-cover md:h-[34rem]"
             />
           </Reveal>

@@ -1,6 +1,6 @@
 import "server-only";
 import { env } from "./../env";
-import type { FulfillmentAdapter, OrderRequest, OrderResult } from "../fulfillment";
+import type { FulfillmentAdapter, OrderRequest, OrderResult, VendorOrderStatus } from "../fulfillment";
 
 /**
  * Goody — curated physical gifts, shipped to an address we choose.
@@ -299,8 +299,47 @@ export function orderBatchBody(
   };
 }
 
+/** The slice of their order record that carries progress. */
+type GoodyOrder = {
+  status?: string;
+  shipments?: {
+    carrier?: string | null;
+    tracking_url?: string | null;
+    shipped_at?: string | null;
+    delivered_at?: string | null;
+  }[];
+};
+
+/**
+ * Their order record, read as one of our transitions. Pure and exported so
+ * the mapping can be tested without a key. Deliberately conservative: only
+ * positive evidence moves a gift forward — an unrecognised status returns
+ * null and the date-based fallback keeps custody.
+ */
+export function orderStatusFrom(order: GoodyOrder): VendorOrderStatus {
+  const shipments = order.shipments ?? [];
+  const trackingUrl = shipments.find((s) => s.tracking_url)?.tracking_url ?? undefined;
+
+  if (order.status === "canceled") return { status: "canceled" };
+  if (order.status === "delivered" || shipments.some((s) => s.delivered_at)) {
+    return { status: "delivered", trackingUrl };
+  }
+  if (order.status === "shipped" || shipments.some((s) => s.shipped_at || s.tracking_url)) {
+    return { status: "shipped", trackingUrl };
+  }
+  return null;
+}
+
 export const goodyAdapter: FulfillmentAdapter = {
   id: "goody",
+
+  /** Ask Goody how the parcel is really doing; null when they can't say. */
+  async orderStatus(vendorOrderRef) {
+    const lookup = await call<{ data?: GoodyOrder } & GoodyOrder>(
+      `/orders/${encodeURIComponent(vendorOrderRef)}`,
+    );
+    return orderStatusFrom(lookup.data ?? lookup);
+  },
 
   /**
    * The same questions ordering would ask — is the product still active,

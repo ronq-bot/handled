@@ -12,6 +12,8 @@ import { formatMoney, getProduct, getVendor } from "@/lib/catalog";
 import { formatLong, formatTime } from "@/lib/date";
 import { StatusPill } from "@/components/ui";
 import { ProductImage } from "@/components/product-image";
+import { MissionProgress } from "@/components/mission-progress";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { cancelMissionAction, retryMissionAction } from "../../../actions";
 
 export const metadata = { title: "Gift detail — Handled" };
@@ -70,6 +72,10 @@ export default async function MissionPage({
           </div>
         </div>
 
+        <div className="mt-6">
+          <MissionProgress status={mission.status} />
+        </div>
+
         <dl className="mt-6 grid gap-4 border-t border-line pt-5 sm:grid-cols-2">
           <Row label="Arrives" value={formatLong(mission.deliver_on)} />
           <Row label="Order goes in" value={formatLong(mission.ship_on)} />
@@ -104,6 +110,21 @@ export default async function MissionPage({
           {mission.vendor_order_ref && (
             <Row label="Vendor order" value={<span className="font-mono">{mission.vendor_order_ref}</span>} />
           )}
+          {mission.tracking_url && (
+            <Row
+              label="Tracking"
+              value={
+                <a
+                  href={mission.tracking_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-forest underline decoration-brass/60 underline-offset-4 hover:decoration-brass"
+                >
+                  Follow the parcel →
+                </a>
+              }
+            />
+          )}
         </dl>
 
         {mission.gift_message && (
@@ -131,9 +152,12 @@ export default async function MissionPage({
           {["scheduled", "failed"].includes(mission.status) && (
             <form action={cancelMissionAction}>
               <input type="hidden" name="id" value={mission.id} />
-              <button type="submit" className="btn btn-ghost text-muted">
+              <ConfirmSubmit
+                message="Call this gift off? The date goes back to uncovered."
+                className="btn btn-ghost text-muted"
+              >
                 Cancel this gift
-              </button>
+              </ConfirmSubmit>
             </form>
           )}
           {occasion && (

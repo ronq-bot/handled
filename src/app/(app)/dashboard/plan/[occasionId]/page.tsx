@@ -8,6 +8,7 @@ import { formatMoney, getVendor, OCCASION_LABELS, CATEGORY_LABELS } from "@/lib/
 import { countdown, formatLong, formatShort, nextAnniversary, today } from "@/lib/date";
 import { scheduleMissionAction } from "../../../actions";
 import { PlannerControls } from "./planner-controls";
+import { MessageField } from "./message-field";
 import { ProductImage } from "@/components/product-image";
 
 export const metadata = { title: "Schedule a gift — Handled" };
@@ -266,18 +267,10 @@ export default async function PlanPage({
           <label className="label" htmlFor="gift_message">
             Card message
           </label>
-          <textarea
-            id="gift_message"
-            name="gift_message"
-            rows={3}
-            maxLength={250}
-            className="field resize-y"
-            placeholder="Happy birthday. Yes, I remembered. — M"
+          <MessageField
+            occasionKind={occasion.kind}
+            signOff={`— ${(user.name.trim()[0] ?? "M").toUpperCase()}`}
           />
-          <p className="mt-2 text-xs text-muted">
-            250 characters. Write it now, while you have thoughts. Leave it blank and we&apos;ll use
-            something tasteful and generic, which she will notice.
-          </p>
         </section>
 
         <div className="flex flex-wrap items-center gap-3">
