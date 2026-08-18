@@ -17,15 +17,26 @@ export type OrderResult =
   | { ok: true; vendorOrderRef: string; priceCents: number }
   | { ok: false; reason: string };
 
+export type PreflightResult = { ok: true } | { ok: false; reason: string };
+
 /**
  * Every gifting partner gets wrapped in this one interface. Swapping the mock
  * for a real 1-800-Flowers / Edible / Goldbelly integration is a matter of
  * writing one of these and registering it below — nothing upstream changes.
  * See docs/VENDORS.md for the shortlist and what each one actually supports.
+ *
+ * `preflight` answers "would this order be refused today?" without placing
+ * anything. The dispatcher runs it in the reminder window, days before the
+ * ship date, so a withdrawn or restricted product surfaces while there is
+ * still runway to fix it — rule 5 in docs/VENDORS.md, made real. A definite
+ * refusal returns ok:false; anything inconclusive (network trouble) should
+ * THROW, which callers treat as "unknown, try again later", never as a
+ * refusal.
  */
 export interface FulfillmentAdapter {
   id: string;
   placeOrder(req: OrderRequest): Promise<OrderResult>;
+  preflight?(req: OrderRequest): Promise<PreflightResult>;
 }
 
 /**
@@ -36,24 +47,38 @@ export interface FulfillmentAdapter {
 export const mockAdapter: FulfillmentAdapter = {
   id: "mock",
   async placeOrder({ mission, product, address }) {
-    if (process.env.HANDLED_FORCE_FAIL === "1") {
-      return { ok: false, reason: "Vendor reported the item is out of stock for that date." };
-    }
+    const refusal = mockRefusal(product, address);
+    if (refusal) return { ok: false, reason: refusal };
 
-    const vendor = getVendor(product.vendorId);
-    if (!vendor) return { ok: false, reason: "Unknown vendor." };
-
-    if (!product.workFriendly && address.kind === "work") {
-      return { ok: false, reason: "Alcohol cannot be delivered to a business address." };
-    }
-    if (!/^\d{5}(-\d{4})?$/.test(address.postal_code.trim())) {
-      return { ok: false, reason: `Vendor rejected the postal code "${address.postal_code}".` };
-    }
-
+    const vendor = getVendor(product.vendorId)!;
     const ref = `${vendor.id.toUpperCase().slice(0, 4)}-${mission.id.slice(-8).toUpperCase()}`;
     return { ok: true, vendorOrderRef: ref, priceCents: product.priceCents };
   },
+
+  // Same rules as placing, so the early check catches exactly what the ship
+  // date would — which also makes the rescue paths exercisable in tests.
+  async preflight({ product, address }) {
+    const refusal = mockRefusal(product, address);
+    return refusal ? { ok: false, reason: refusal } : { ok: true };
+  },
 };
+
+function mockRefusal(
+  product: OrderRequest["product"],
+  address: OrderRequest["address"],
+): string | null {
+  if (process.env.HANDLED_FORCE_FAIL === "1") {
+    return "Vendor reported the item is out of stock for that date.";
+  }
+  if (!getVendor(product.vendorId)) return "Unknown vendor.";
+  if (!product.workFriendly && address.kind === "work") {
+    return "Alcohol cannot be delivered to a business address.";
+  }
+  if (!/^\d{5}(-\d{4})?$/.test(address.postal_code.trim())) {
+    return `Vendor rejected the postal code "${address.postal_code}".`;
+  }
+  return null;
+}
 
 /**
  * Which vendors a live integration can actually serve. Anything not listed

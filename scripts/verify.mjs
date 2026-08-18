@@ -286,14 +286,14 @@ const { getDb, newId, nowIso, toPositional, sslFor } = await import("../src/lib/
 const db = await getDb();
 const { runDispatch } = await import("../src/lib/dispatcher.ts");
 
-async function seed({ paymentOk = 1, productId = "bouquet_garden_seasonal", postal = "28203" } = {}) {
+async function seed({ paymentOk = 1, productId = "bouquet_garden_seasonal", postal = "28203", autoPilot = 1 } = {}) {
   const userId = newId("usr");
   const recipientId = newId("rcp");
   const addressId = newId("adr");
   const occasionId = newId("occ");
   const missionId = newId("msn");
 
-  await db.run(`INSERT INTO users (id, email, password_hash, name, payment_ok, created_at) VALUES (?, ?, 'x', 'Mike', ?, ?)`, [userId, `${userId}@example.com`, paymentOk, nowIso()]);
+  await db.run(`INSERT INTO users (id, email, password_hash, name, payment_ok, auto_pilot, created_at) VALUES (?, ?, 'x', 'Mike', ?, ?, ?)`, [userId, `${userId}@example.com`, paymentOk, autoPilot, nowIso()]);
   await db.run(`INSERT INTO recipients (id, user_id, name, created_at) VALUES (?, ?, 'Dana', ?)`, [recipientId, userId, nowIso()]);
   await db.run(`INSERT INTO addresses (id, user_id, recipient_id, kind, line1, city, state, postal_code, created_at)
      VALUES (?, ?, ?, 'work', '1900 Trade St', 'Charlotte', 'NC', ?, ?)`, [addressId, userId, recipientId, postal, nowIso()]);
@@ -403,7 +403,7 @@ const status = async (id) => (await db.get(`SELECT status FROM missions WHERE id
 }
 
 {
-  const id = await seed({ productId: "wine_duo_reserve" });
+  const id = await seed({ productId: "wine_duo_reserve", autoPilot: 0 });
   await runDispatch("2026-08-18");
   assert.equal(await status(id), "failed");
   const row = await db.get(`SELECT failure_reason FROM missions WHERE id = ?`, [id]);
@@ -413,11 +413,64 @@ const status = async (id) => (await db.get(`SELECT status FROM missions WHERE id
 }
 
 {
-  const id = await seed({ postal: "2820" });
+  const id = await seed({ postal: "2820", autoPilot: 0 });
   await runDispatch("2026-08-18");
   assert.equal(await status(id), "failed");
   passed += 1;
   console.log("  ok  a malformed postal code fails before anyone is disappointed");
+}
+
+{
+  // Auto-Pilot ON: the same refusal becomes a rescue, not homework. The
+  // mission stays scheduled, wearing a different, office-safe product.
+  const id = await seed({ productId: "wine_duo_reserve", autoPilot: 1 });
+  const report = await runDispatch("2026-08-18");
+  assert.equal(await status(id), "scheduled");
+  const row = await db.get(`SELECT product_id FROM missions WHERE id = ?`, [id]);
+  assert.notEqual(row.product_id, "wine_duo_reserve");
+  assert.ok(report.rescued.includes(id), "the report must list the rescue");
+  const note = await db.get(
+    `SELECT note FROM mission_events WHERE mission_id = ? AND note LIKE 'Auto-Pilot rescued%'`,
+    [id],
+  );
+  assert.ok(note, "the timeline must record the rescue");
+  passed += 1;
+  console.log("  ok  Auto-Pilot rescues a refused product instead of filing homework");
+}
+
+{
+  // The reminder window is also an early-warning check: a product the vendor
+  // would refuse is caught days BEFORE the ship date, not on it.
+  const id = await seed({ productId: "wine_duo_reserve", autoPilot: 0 });
+  await db.run(`UPDATE missions SET ship_on = '2026-08-18', deliver_on = '2026-08-20' WHERE id = ?`, [id]);
+  await runDispatch("2026-08-16");
+  assert.equal(await status(id), "failed", "caught two days before the ship date");
+  const reminded = await db.get(
+    `SELECT COUNT(*) AS n FROM mission_events WHERE mission_id = ? AND status = 'reminder'`,
+    [id],
+  );
+  assert.equal(Number(reminded.n), 0, "no reminder for a gift that cannot ship");
+  passed += 1;
+  console.log("  ok  a doomed product is caught in the reminder window, days early");
+}
+
+{
+  // The rescue cap: when every product is refused, Auto-Pilot swaps twice and
+  // then admits defeat honestly instead of burning gifts forever.
+  const id = await seed({ autoPilot: 1 });
+  process.env.HANDLED_FORCE_FAIL = "1";
+  try {
+    await runDispatch("2026-08-20");
+    assert.equal(await status(id), "scheduled", "first refusal is rescued");
+    await runDispatch("2026-08-20");
+    assert.equal(await status(id), "scheduled", "second refusal is rescued");
+    await runDispatch("2026-08-20");
+    assert.equal(await status(id), "failed", "the cap turns the third refusal into an honest failure");
+  } finally {
+    delete process.env.HANDLED_FORCE_FAIL;
+  }
+  passed += 1;
+  console.log("  ok  the rescue cap stops an unfixable mission from looping forever");
 }
 
 {

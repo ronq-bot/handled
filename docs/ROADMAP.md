@@ -54,7 +54,11 @@ fix, one tap.*
 - **Gift history intelligence.** "You sent flowers three times running" → Auto-Pilot already
   penalizes repeats; surface it as advice.
 - **Budget planning.** Annual budget across all dates, not per-gift ceilings.
-- **The rescue flow.** Same-day sourcing when a scheduled gift fails — the paid tiers' core promise.
+- **The rescue flow.** ~~Catching a dead product early, and replacing it without homework~~ —
+  done: adapters pre-flight upcoming gifts in the reminder window (days before the ship date),
+  and Auto-Pilot accounts get an automatic replacement (capped at two swaps) with a "we handled
+  it, change it if you disagree" email. Still ahead: same-day sourcing when the failure happens
+  on the day itself — the paid tiers' core promise.
 
 ## Phase 3 — iOS (8–12 weeks, starts once Phase 1 is live)
 
