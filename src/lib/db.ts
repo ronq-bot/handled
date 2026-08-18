@@ -157,6 +157,10 @@ const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
   // The member's verdict on a delivered gift: '' (unrated), 'hit', or 'miss'.
   // A miss becomes a per-recipient veto the picker honours from then on.
   ["missions", "feedback", "TEXT NOT NULL DEFAULT ''"],
+  // Password reset: we store only the SHA-256 of the emailed token, so a
+  // database read can't mint a working reset link. Expiry is an ISO instant.
+  ["users", "reset_token_hash", "TEXT NOT NULL DEFAULT ''"],
+  ["users", "reset_token_expires", "TEXT NOT NULL DEFAULT ''"],
 ];
 
 /**
@@ -291,7 +295,7 @@ async function openPostgres(url: string): Promise<Database> {
   // the schema is current and one round trip replaces them all. (Point the
   // sentinel at whatever the latest migration creates.)
   const probe = await pool.query(
-    `SELECT 1 FROM information_schema.columns WHERE table_name = 'missions' AND column_name = 'feedback'`,
+    `SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'reset_token_hash'`,
   );
   if (probe.rows.length === 0) {
     await pool.query(SCHEMA);

@@ -30,6 +30,9 @@ export type User = {
   stripe_payment_method_id: string;
   /** ISO timestamp of the last "your year is nearly up" nudge, or "". */
   renewal_nudged_at: string;
+  /** SHA-256 of the emailed password-reset token, or "" when none is live. */
+  reset_token_hash: string;
+  reset_token_expires: string;
   created_at: string;
 };
 

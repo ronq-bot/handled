@@ -14,7 +14,12 @@ import { StatusPill } from "@/components/ui";
 import { ProductImage } from "@/components/product-image";
 import { MissionProgress } from "@/components/mission-progress";
 import { ConfirmSubmit } from "@/components/confirm-submit";
-import { cancelMissionAction, recordFeedbackAction, retryMissionAction } from "../../../actions";
+import {
+  cancelMissionAction,
+  recordFeedbackAction,
+  retryMissionAction,
+  updateMissionMessageAction,
+} from "../../../actions";
 
 export const metadata = { title: "Gift detail — Handled" };
 export const dynamic = "force-dynamic";
@@ -127,11 +132,47 @@ export default async function MissionPage({
           )}
         </dl>
 
-        {mission.gift_message && (
+        {/* Editable until the order goes in; after that it's printed and boxed. */}
+        {mission.status === "scheduled" ? (
           <div className="mt-5 rounded-xl border border-line bg-bone-2 p-4">
             <div className="label mb-1">Card message</div>
-            <p className="italic">&ldquo;{mission.gift_message}&rdquo;</p>
+            {mission.gift_message ? (
+              <p className="italic">&ldquo;{mission.gift_message}&rdquo;</p>
+            ) : (
+              <p className="text-sm text-muted">No message yet — the card would go in blank.</p>
+            )}
+            <details className="mt-2">
+              <summary className="inline-block cursor-pointer py-1 text-sm text-muted hover:text-ink">
+                {mission.gift_message ? "Rewrite it" : "Write one"}
+              </summary>
+              <form action={updateMissionMessageAction} className="mt-3 space-y-3">
+                <input type="hidden" name="id" value={mission.id} />
+                <textarea
+                  name="gift_message"
+                  rows={3}
+                  maxLength={250}
+                  defaultValue={mission.gift_message}
+                  className="field resize-y"
+                  placeholder="Say the thing you'd say if you remembered on your own."
+                />
+                <div className="flex items-center gap-3">
+                  <button type="submit" className="btn btn-quiet">
+                    Save the message
+                  </button>
+                  <span className="text-xs text-faint">
+                    Editable until the order goes in {formatLong(mission.ship_on)}.
+                  </span>
+                </div>
+              </form>
+            </details>
           </div>
+        ) : (
+          mission.gift_message && (
+            <div className="mt-5 rounded-xl border border-line bg-bone-2 p-4">
+              <div className="label mb-1">Card message</div>
+              <p className="italic">&ldquo;{mission.gift_message}&rdquo;</p>
+            </div>
+          )
         )}
 
         {mission.status === "delivered" && (

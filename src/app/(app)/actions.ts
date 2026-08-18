@@ -224,6 +224,41 @@ export async function sendNowAction(formData: FormData): Promise<void> {
   redirect(`/dashboard/plan/${id}?mode=manual`);
 }
 
+/**
+ * Rename freely; move the date only while nothing is scheduled against it.
+ * A mission's ship/deliver dates were computed from the old date — silently
+ * leaving them behind would ship a birthday gift to the wrong week.
+ */
+export async function updateOccasionAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const db = await getDb();
+  const id = s(formData, "id");
+  const occasion = await getOccasion(user.id, id);
+  if (!occasion) return;
+
+  const title = s(formData, "title") || occasion.title;
+
+  let eventDate = occasion.event_date;
+  const requestedDate = s(formData, "event_date");
+  if (requestedDate && requestedDate !== occasion.event_date && isCalendarDate(requestedDate)) {
+    const scheduled = await db.get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM missions
+       WHERE occasion_id = ? AND user_id = ? AND status IN ('scheduled', 'placed', 'shipped')`,
+      [id, user.id],
+    );
+    if (Number(scheduled?.n ?? 0) === 0) eventDate = requestedDate;
+  }
+
+  await db.run(`UPDATE occasions SET title = ?, event_date = ? WHERE id = ? AND user_id = ?`, [
+    title,
+    eventDate,
+    id,
+    user.id,
+  ]);
+  refreshApp();
+  redirect("/dashboard/dates");
+}
+
 export async function deleteOccasionAction(formData: FormData): Promise<void> {
   const user = await requireUser();
   const db = await getDb();
@@ -421,6 +456,25 @@ export async function retryMissionAction(formData: FormData): Promise<void> {
     id,
     user.id,]);
   await logMissionEvent(id, "scheduled", `Rescued with ${pick.product.name}, delivering ${deliverOn}.`);
+  refreshApp();
+}
+
+/**
+ * The card message stays editable right up until the order goes in — after
+ * that it's printed and in a box somewhere, and pretending otherwise is a lie.
+ */
+export async function updateMissionMessageAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const db = await getDb();
+  const id = s(formData, "id");
+  const mission = await getMission(user.id, id);
+  if (!mission || mission.status !== "scheduled") return;
+
+  await db.run(
+    `UPDATE missions SET gift_message = ?, updated_at = ?
+     WHERE id = ? AND user_id = ? AND status = 'scheduled'`,
+    [s(formData, "gift_message").slice(0, 250), nowIso(), id, user.id],
+  );
   refreshApp();
 }
 

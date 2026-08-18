@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { getDb, newId, nowIso } from "./db";
 import type { User } from "./types";
 
@@ -38,6 +38,50 @@ export async function createUser(email: string, password: string, name: string):
 export async function findUserByEmail(email: string): Promise<User | undefined> {
   const db = await getDb();
   return db.get<User>(`SELECT * FROM users WHERE email = ?`, [email.toLowerCase().trim()]);
+}
+
+const RESET_MINUTES = 60;
+
+const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
+
+/**
+ * Mints a reset token for the account and returns the raw value for the
+ * email link. Only its SHA-256 is stored, so reading the database can never
+ * produce a working link. A new request replaces any older token.
+ */
+export async function createResetToken(userId: string): Promise<string> {
+  const db = await getDb();
+  const token = randomBytes(32).toString("hex");
+  const expires = new Date(Date.now() + RESET_MINUTES * 60_000).toISOString();
+  await db.run(`UPDATE users SET reset_token_hash = ?, reset_token_expires = ? WHERE id = ?`, [
+    tokenHash(token),
+    expires,
+    userId,
+  ]);
+  return token;
+}
+
+/**
+ * Redeems a reset token: sets the new password, clears the token so the link
+ * works exactly once, and revokes every open session — whoever forced the
+ * reset should be the only one left signed in. Returns false for a token
+ * that is unknown, expired, or already used.
+ */
+export async function resetPasswordWithToken(token: string, password: string): Promise<boolean> {
+  if (!token) return false;
+  const db = await getDb();
+  const user = await db.get<User>(
+    `SELECT * FROM users WHERE reset_token_hash = ? AND reset_token_expires > ?`,
+    [tokenHash(token), nowIso()],
+  );
+  if (!user) return false;
+
+  await db.run(
+    `UPDATE users SET password_hash = ?, reset_token_hash = '', reset_token_expires = '' WHERE id = ?`,
+    [hashPassword(password), user.id],
+  );
+  await db.run(`DELETE FROM sessions WHERE user_id = ?`, [user.id]);
+  return true;
 }
 
 export async function startSession(userId: string): Promise<void> {
