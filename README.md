@@ -58,6 +58,7 @@ nothing else changes. **Account → Connected services** shows live status.
 | `RESEND_API_KEY` | Order, delivery and failure emails actually send | resend.com/api-keys — free, no card |
 | `DATABASE_URL` | Hosted Postgres instead of the local file | neon.tech or supabase.com |
 | `FLORIST_ONE_API_USER` + `_PASSWORD` | Flowers ordered from real florists against confirmed delivery dates | floristone.com/api |
+| `FLORIST_ONE_CARD_NUMBER` + `_EXP` (MMYYYY) + `_CVV` | The card each flower order is paid with (their affiliate model — our card pays, they commission back). Their documented test card while the key is in Test mode; the company card in Live mode | as sensitive as the Stripe key |
 | `GIFTBIT_API_KEY` | An experience credit is emailed to *him* on the day — never to her, so the surprise holds | testbedapp.giftbit.com — self-serve sandbox |
 | `GOODY_API_KEY` | Confectionery, bakery, spa and home gifts posted to her address | developer.ongoody.com — self-serve key, free sandbox |
 | `PRINTFUL_API_KEY` | Engraved and printed-to-order gifts produced and shipped to her | printful.com → Settings → API — self-serve token. Orders stay drafts until `PRINTFUL_ENV=production`; each product needs its store's sync variant id in `vendorSku` |

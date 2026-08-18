@@ -152,23 +152,50 @@ async function floristOne() {
   }
 
   const zip = "28202";
-  const dates = await fetch(
-    `https://www.floristone.com/api/rest/flowershop/getdeliverydates?zipcode=${zip}`,
-    { headers },
+  // The adapter's own call — the same code that gates real orders.
+  const { availableDeliveryDates, orderTotalFor, floristOneAdapter } = await import(
+    "../src/lib/vendors/florist-one.ts"
   );
-  if (dates.ok) {
-    // Parse with the adapter's own parser — the same code that gates real orders.
-    const { parseDeliveryDates } = await import("../src/lib/vendors/florist-one.ts");
-    const payload = await dates.json();
-    const list = parseDeliveryDates(payload.DELIVERYDATES ?? payload.deliverydates ?? []);
-    line(`  deliverable dates for ${zip} (their 15,000-florist network answering): ${list.slice(0, 7).join(", ")}`);
-  } else {
-    line(`  getdeliverydates returned HTTP ${dates.status} — check account permissions.`);
+  const list = await availableDeliveryDates(zip);
+  line(`  deliverable dates for ${zip} (their 15,000-florist network answering): ${list.slice(0, 7).join(", ")}`);
+
+  const sample = catalogue[0];
+  if (sample?.CODE) {
+    const total = await orderTotalFor(sample.CODE, Number(sample.PRICE), zip);
+    line(`  landed cost check: ${sample.CODE} at $${sample.PRICE} totals $${total.toFixed(2)} with their delivery fee and tax.`);
   }
 
-  line("  NOTE: no test order is ever placed here — Florist One has no sandbox, every order");
-  line("  is a real bouquet and a real charge. The date + catalogue check above is the");
-  line("  integration proof; the first real order should be one you send yourself.\n");
+  if (flags.has("--order-florist")) {
+    // Their accounts have no sandbox flag we can read, so the operator must
+    // assert Test mode explicitly — in Live mode this would order real
+    // flowers on the configured card.
+    if (process.env.FLORIST_ONE_TEST_MODE !== "1") {
+      line("  --order-florist REFUSED: set FLORIST_ONE_TEST_MODE=1 in .env.local to confirm");
+      line("  the API key is still in Test mode (their email says so until Live approval).\n");
+      return;
+    }
+    const deliverOn = list[2] ?? list[0];
+    if (!sample?.CODE || !deliverOn) {
+      line("  --order-florist: no product or date available to order against.\n");
+      return;
+    }
+    line(`  placing ONE Test-mode order (${sample.CODE}, delivery ${deliverOn}) through the real adapter…`);
+    const result = await floristOneAdapter.placeOrder({
+      mission: { id: `test_${crypto.randomUUID().slice(0, 12)}`, gift_message: "Adapter test drive — Test-mode order. — Handled", deliver_on: deliverOn },
+      product: { id: "test_flowers", name: sample.NAME ?? "Test bouquet", priceCents: Math.round(Number(sample.PRICE) * 100), vendorSku: sample.CODE },
+      recipient: { name: "Test Recipient" },
+      address: { line1: "412 Rosewood Ln", line2: "", city: "Charlotte", state: "NC", postal_code: zip, country: "US" },
+      buyer: { name: "Handled Test", email: "test@floristone.com" },
+    });
+    if (result.ok) {
+      line(`  ✓ ORDER PLACED (Test mode — no flowers ship): order number ${result.vendorOrderRef}.`);
+    } else {
+      line(`  ✗ order refused: ${result.reason}`);
+    }
+  } else {
+    line("  (add --order-florist to place one Test-mode order — requires FLORIST_ONE_TEST_MODE=1)");
+  }
+  line();
 }
 
 await goody();
