@@ -96,6 +96,8 @@ export type Mission = {
   vendor_payload: string;
   /** Partner commission earned on this order, captured at placement time. */
   affiliate_cents: number;
+  /** Carrier tracking link, when the vendor reports one. Empty until then. */
+  tracking_url: string;
   created_at: string;
   updated_at: string;
 };

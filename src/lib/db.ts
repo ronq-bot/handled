@@ -151,6 +151,9 @@ const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
   // not what today's rate would have earned. Operator-facing only — this
   // number must never reach a customer-visible page.
   ["missions", "affiliate_cents", "INTEGER NOT NULL DEFAULT 0"],
+  // Filled in when the vendor reports real shipment progress; the dispatcher
+  // shows it as "track the parcel" on the gift page.
+  ["missions", "tracking_url", "TEXT NOT NULL DEFAULT ''"],
 ];
 
 /**
@@ -285,7 +288,7 @@ async function openPostgres(url: string): Promise<Database> {
   // the schema is current and one round trip replaces them all. (Point the
   // sentinel at whatever the latest migration creates.)
   const probe = await pool.query(
-    `SELECT 1 FROM pg_indexes WHERE indexname = 'idx_missions_status_deliver'`,
+    `SELECT 1 FROM information_schema.columns WHERE table_name = 'missions' AND column_name = 'tracking_url'`,
   );
   if (probe.rows.length === 0) {
     await pool.query(SCHEMA);

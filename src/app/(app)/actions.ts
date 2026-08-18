@@ -200,6 +200,29 @@ export async function createOccasionAction(formData: FormData): Promise<void> {
   redirect(next ? safePath(next.replace("{id}", id)) : `/dashboard/plan/${id}`);
 }
 
+/**
+ * "Send a gift now" — no occasion required. Creates a one-off Just Because
+ * date at the earliest window most of the catalogue can genuinely make
+ * (four days covers flowers and the curated range; anything slower simply
+ * won't appear in the planner), then drops straight into choosing.
+ */
+export async function sendNowAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const db = await getDb();
+  const recipientId = s(formData, "recipient_id");
+  if (!await getRecipient(user.id, recipientId)) return;
+
+  const id = newId("occ");
+  await db.run(
+    `INSERT INTO occasions (id, user_id, recipient_id, kind, title, event_date, recurring, created_at)
+     VALUES (?, ?, ?, 'just_because', 'Just because', ?, 0, ?)`,
+    [id, user.id, recipientId, addDays(today(), 4), nowIso()],
+  );
+
+  refreshApp();
+  redirect(`/dashboard/plan/${id}?mode=manual`);
+}
+
 export async function deleteOccasionAction(formData: FormData): Promise<void> {
   const user = await requireUser();
   const db = await getDb();

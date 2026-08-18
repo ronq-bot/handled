@@ -20,6 +20,18 @@ export type OrderResult =
 export type PreflightResult = { ok: true } | { ok: false; reason: string };
 
 /**
+ * What the vendor says about an order we already placed. `null` means "no
+ * verdict" — the vendor gave no usable signal, and the caller falls back to
+ * date-based transitions. `canceled` is the ugly one: the vendor accepted
+ * the order and then killed it, which must surface as a failure, never as a
+ * gift quietly marked delivered on schedule.
+ */
+export type VendorOrderStatus = {
+  status: "placed" | "shipped" | "delivered" | "canceled";
+  trackingUrl?: string;
+} | null;
+
+/**
  * Every gifting partner gets wrapped in this one interface. Swapping the mock
  * for a real 1-800-Flowers / Edible / Goldbelly integration is a matter of
  * writing one of these and registering it below — nothing upstream changes.
@@ -37,6 +49,12 @@ export interface FulfillmentAdapter {
   id: string;
   placeOrder(req: OrderRequest): Promise<OrderResult>;
   preflight?(req: OrderRequest): Promise<PreflightResult>;
+  /**
+   * Real progress for a placed order, when the partner can report it. The
+   * dispatcher prefers this over its date-based stopgap, which stays as the
+   * fallback for partners (and the mock) that cannot answer.
+   */
+  orderStatus?(vendorOrderRef: string): Promise<VendorOrderStatus>;
 }
 
 /**

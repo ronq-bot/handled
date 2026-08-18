@@ -880,7 +880,7 @@ check("the recipient record has no contact route at all", () => {
 
 console.log("\ngoody adapter — shipped to her, signed by him");
 
-const { goodyAdapter, goodyIsLive, orderBatchBody, rejectionReason, isCommerceKey, chooseCard, resolveVariants } = await import("../src/lib/vendors/goody.ts");
+const { goodyAdapter, goodyIsLive, orderBatchBody, rejectionReason, isCommerceKey, chooseCard, resolveVariants, orderStatusFrom } = await import("../src/lib/vendors/goody.ts");
 
 const goodyOrder = {
   mission: { id: "msn_g", gift_message: "Happy birthday. — M", deliver_on: "2026-08-20" },
@@ -889,6 +889,28 @@ const goodyOrder = {
   address: { line1: "412 Rosewood Ln", line2: "Apt 3", city: "Charlotte", state: "NC", postal_code: "28202", country: "US" },
   buyer: { name: "Mike Ruiz", email: "mike@example.com" },
 };
+
+check("their order record maps to our transitions, conservatively", () => {
+  // No signal → no verdict; the date-based fallback keeps custody.
+  assert.equal(orderStatusFrom({ status: "created", shipments: [] }), null);
+  assert.equal(orderStatusFrom({}), null);
+  // A shipment with tracking is proof of motion, and the link travels along.
+  assert.deepEqual(
+    orderStatusFrom({ status: "created", shipments: [{ tracking_url: "https://t.co/x" }] }),
+    { status: "shipped", trackingUrl: "https://t.co/x" },
+  );
+  // Their own words win when they say so.
+  assert.equal(orderStatusFrom({ status: "shipped", shipments: [] }).status, "shipped");
+  assert.deepEqual(
+    orderStatusFrom({ status: "delivered", shipments: [{ tracking_url: "https://t.co/x" }] }),
+    { status: "delivered", trackingUrl: "https://t.co/x" },
+  );
+  assert.equal(orderStatusFrom({ shipments: [{ delivered_at: "2026-08-20" }] }).status, "delivered");
+  // The ugly one: accepted then killed must surface, never be papered over.
+  assert.deepEqual(orderStatusFrom({ status: "canceled" }), { status: "canceled" });
+  // An unrecognised status is not a verdict.
+  assert.equal(orderStatusFrom({ status: "notified", shipments: [] }), null);
+});
 
 check("goody is live exactly when its key is present", () => {
   assert.equal(goodyIsLive(), Boolean(process.env.GOODY_API_KEY));

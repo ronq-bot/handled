@@ -66,6 +66,9 @@ export default async function DashboardPage({
           <Link href="/dashboard/dates/new" className="btn btn-primary">
             Add a date
           </Link>
+          <Link href="/dashboard/send" className="btn btn-quiet" title="No occasion required.">
+            Send a gift now
+          </Link>
           {/* A development affordance: the real scheduler is a cron, and the
               action refuses in production, so the button hides there too. */}
           {process.env.NODE_ENV !== "production" && (
