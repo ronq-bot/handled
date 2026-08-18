@@ -72,11 +72,18 @@ export async function syncFloristOne(): Promise<SyncReport> {
   const theirs = data.PRODUCTS ?? [];
 
   // Match on price band — their catalogue is the source of truth for what a
-  // bouquet at this price actually looks like.
+  // bouquet at this price actually looks like. Each of their listings may be
+  // claimed once: without that, two of our products at similar prices both
+  // become the same bouquet with the same photo and copy.
+  const used = new Set<string>();
   const matched = flowers
     .map((ours) => {
-      const best = nearestByPrice(theirs, ours.priceCents);
+      const best = nearestByPrice(
+        theirs.filter((t) => !t.CODE || !used.has(t.CODE)),
+        ours.priceCents,
+      );
       if (!best) return null;
+      if (best.CODE) used.add(best.CODE);
       return {
         id: ours.id,
         vendorSku: best.CODE,
