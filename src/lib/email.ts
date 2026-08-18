@@ -161,6 +161,23 @@ export function emailRenewal(o: {
   });
 }
 
+export function emailRescued(
+  o: OrderMail & { originalGift: string; reason: string; changeUrl: string },
+) {
+  return send({
+    to: o.to,
+    subject: `Swapped — ${o.occasion}`,
+    heading: "Handled, differently.",
+    body: [
+      `${esc(o.firstName)}, the ${esc(o.originalGift)} for <strong>${esc(o.occasion)}</strong> fell through: <em>${esc(o.reason)}</em>`,
+      `Auto-Pilot has already replaced it. <strong>${esc(o.gift)}</strong> now arrives ${formatLong(o.deliverOn)} instead — same budget, same date, still her taste.`,
+      `Disagree with the pick? <a href="${o.changeUrl}" style="color:#1f3d2b">Choose something else before it ships →</a>`,
+    ],
+    footer:
+      "This is Auto-Pilot doing its job. Nothing is required from you unless you want a different replacement.",
+  });
+}
+
 export function emailFailed(o: OrderMail & { reason: string; fixUrl: string }) {
   return send({
     to: o.to,

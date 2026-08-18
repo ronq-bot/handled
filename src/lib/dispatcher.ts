@@ -4,16 +4,19 @@ import { getProduct, type Product } from "./catalog";
 import { adapterFor } from "./fulfillment";
 import { affiliateCentsFor } from "./fulfilment-map";
 import { chargeForMission, userCanBeCharged } from "./payments";
+import { autoPick } from "./picker";
+import { planDelivery } from "./scheduling";
 import {
   emailArrivingToday,
   emailDelivered,
   emailFailed,
   emailOrderPlaced,
   emailRenewal,
+  emailRescued,
   emailUpcomingOrder,
 } from "./email";
 import { env } from "./env";
-import { logMissionEvent } from "./queries";
+import { getOccasion, logMissionEvent, recentProductIds } from "./queries";
 import { addDays, daysBetween, today, type IsoDate } from "./date";
 import type { Address, Mission, Recipient, User } from "./types";
 
@@ -24,6 +27,8 @@ export type DispatchReport = {
   shipped: string[];
   delivered: string[];
   failed: { id: string; reason: string }[];
+  /** Missions whose product fell through and was replaced by Auto-Pilot. */
+  rescued: string[];
   /** User ids asked to schedule another year. */
   renewalsNudged: string[];
 };
@@ -54,6 +59,7 @@ export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchRepo
     shipped: [],
     delivered: [],
     failed: [],
+    rescued: [],
     renewalsNudged: [],
   };
 
@@ -73,6 +79,11 @@ export async function runDispatch(asOf: IsoDate = today()): Promise<DispatchRepo
   );
   for (const mission of dueForReminder) {
     try {
+      // Before promising "this goes out in N days", ask the vendor whether it
+      // still can. A product withdrawn since scheduling surfaces HERE, days
+      // before the ship date, instead of on the one day with no runway left.
+      const caught = await catchEarly(mission, report);
+      if (caught) continue;
       if (await sendReminder(mission, asOf)) report.reminded.push(mission.id);
     } catch (cause) {
       // A reminder is a courtesy; never let one bad row stop the run.
@@ -192,9 +203,10 @@ async function placeMission(mission: Mission, report: DispatchReport): Promise<v
     const result = await adapter.placeOrder({ mission, product, recipient, address, buyer: user });
 
     if (!result.ok) {
-      await failMission(mission.id, result.reason);
-      await notifyFailure(user, mission, product, recipient, result.reason);
-      report.failed.push({ id: mission.id, reason: result.reason });
+      // The vendor would not take THIS product — a different gift can still
+      // save the date, so Auto-Pilot accounts get a rescue, not a form.
+      // (Payment problems never come this way: a new gift fixes nothing there.)
+      await failOrRescue(mission, user, product, recipient, address, result.reason, report);
       return;
     }
 
@@ -354,6 +366,144 @@ async function occasionTitle(occasionId: string): Promise<string> {
     occasionId,
   ]);
   return row?.title ?? "the date";
+}
+
+/**
+ * Early warning: in the reminder window, ask the vendor whether the scheduled
+ * product is still orderable — the same questions ordering will ask on the
+ * ship date, days sooner. Returns true when the mission was caught (failed or
+ * rescued) so the caller skips the now-pointless reminder. Inconclusive
+ * checks (network trouble) throw upstream and are treated as "unknown".
+ */
+async function catchEarly(mission: Mission, report: DispatchReport): Promise<boolean> {
+  const db = await getDb();
+  const product = getProduct(mission.product_id);
+  if (!product) return false; // placement will fail this properly on the day
+
+  const adapter = await adapterFor(product.vendorId);
+  if (!adapter.preflight) return false;
+
+  const [recipient, address, user] = await Promise.all([
+    db.get<Recipient>(`SELECT * FROM recipients WHERE id = ?`, [mission.recipient_id]),
+    db.get<Address>(`SELECT * FROM addresses WHERE id = ?`, [mission.address_id]),
+    db.get<User>(`SELECT * FROM users WHERE id = ?`, [mission.user_id]),
+  ]);
+  if (!recipient || !address || !user) return false;
+
+  let verdict;
+  try {
+    verdict = await adapter.preflight({ mission, product, recipient, address, buyer: user });
+  } catch (cause) {
+    // Unknown is not refused — the ship-date order remains the arbiter.
+    console.error(`dispatch: preflight for ${mission.id} inconclusive`, cause);
+    return false;
+  }
+  if (verdict.ok) return false;
+
+  await failOrRescue(mission, user, product, recipient, address, verdict.reason, report);
+  return true;
+}
+
+/**
+ * How many times Auto-Pilot may swap the product on one mission before
+ * admitting defeat. Without a cap, a problem that is really about the
+ * address or the account would burn a new product every day forever.
+ */
+const RESCUE_CAP = 2;
+
+/**
+ * A vendor refused the product. For Auto-Pilot accounts we do what the
+ * product promises — replace the gift and tell him, rather than emailing him
+ * homework. Everyone else (and anything past the cap, or with nothing left
+ * to pick) gets the honest failure with the one-click fix.
+ */
+async function failOrRescue(
+  mission: Mission,
+  user: User,
+  product: Product,
+  recipient: Recipient,
+  address: Address,
+  reason: string,
+  report: DispatchReport,
+): Promise<void> {
+  const db = await getDb();
+
+  const rescuable = user.auto_pilot === 1;
+  const prior = rescuable
+    ? Number(
+        (
+          await db.get<{ n: number }>(
+            `SELECT COUNT(*) AS n FROM mission_events
+             WHERE mission_id = ? AND status = 'scheduled' AND note LIKE 'Auto-Pilot rescued%'`,
+            [mission.id],
+          )
+        )?.n ?? 0,
+      )
+    : 0;
+
+  const occasion = rescuable ? await getOccasion(user.id, mission.occasion_id) : undefined;
+  const pick =
+    rescuable && prior < RESCUE_CAP
+      ? autoPick({
+          recipient,
+          address,
+          occasionKind: occasion?.kind ?? "just_because",
+          budgetCents: mission.budget_cents,
+          // The failed product leads the recent list, so the variety rule
+          // steers hard away from picking it straight back.
+          recentProductIds: [
+            mission.product_id,
+            ...(await recentProductIds(user.id, mission.recipient_id)),
+          ],
+        })
+      : null;
+
+  if (!pick) {
+    await failMission(mission.id, reason);
+    await notifyFailure(user, mission, product, recipient, reason);
+    report.failed.push({ id: mission.id, reason });
+    return;
+  }
+
+  // Salvage what's left of the runway: keep the date if the replacement can
+  // still make it, otherwise the earliest it can manage.
+  const plan = planDelivery(mission.deliver_on, pick.product, address);
+  const shipOn = plan.tooLate ? today() : plan.shipOn;
+  const deliverOn = plan.tooLate ? addDays(today(), plan.leadDays) : plan.deliverOn;
+
+  await db.run(
+    `UPDATE missions
+     SET product_id = ?, vendor_id = ?, price_cents = ?, deliver_on = ?, ship_on = ?,
+         vendor_order_ref = '', failure_reason = '', updated_at = ?
+     WHERE id = ? AND status = 'scheduled'`,
+    [
+      pick.product.id,
+      pick.product.vendorId,
+      pick.product.priceCents,
+      deliverOn,
+      shipOn,
+      nowIso(),
+      mission.id,
+    ],
+  );
+  await logMissionEvent(
+    mission.id,
+    "scheduled",
+    `Auto-Pilot rescued with ${pick.product.name}, delivering ${deliverOn}, after: ${reason}`,
+  );
+  await emailRescued({
+    to: user.email,
+    firstName: firstNameOf(user),
+    gift: pick.product.name,
+    originalGift: product.name,
+    recipient: recipient.name,
+    occasion: await occasionTitle(mission.occasion_id),
+    deliverOn,
+    where: "",
+    reason,
+    changeUrl: `${env.appUrl}/dashboard/gifts/${mission.id}`,
+  });
+  report.rescued.push(mission.id);
 }
 
 /** True when the heads-up actually went out (and was recorded as sent). */

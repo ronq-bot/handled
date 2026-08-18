@@ -148,6 +148,21 @@ export function campaignBody(
 export const giftbitAdapter: FulfillmentAdapter = {
   id: "giftbit",
 
+  /**
+   * A credit is only orderable if some brand is redeemable at exactly its
+   * price — the check ordering performs, run days early instead.
+   */
+  async preflight({ product }) {
+    const brandCodes = await brandCodesFor(product);
+    if (brandCodes.length === 0) {
+      return {
+        ok: false,
+        reason: `No Giftbit brand is redeemable at exactly $${(product.priceCents / 100).toFixed(2)}.`,
+      };
+    }
+    return { ok: true };
+  },
+
   async placeOrder(request: OrderRequest): Promise<OrderResult> {
     const { mission, product, buyer } = request;
 

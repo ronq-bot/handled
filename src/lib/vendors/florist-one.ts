@@ -309,6 +309,29 @@ type PlaceOrderResponse = { ORDERNO?: number | string; ORDERNUMBER?: number | st
 export const floristOneAdapter: FulfillmentAdapter = {
   id: "florist_one",
 
+  /**
+   * Asks their network, days early, whether the planned date is still
+   * deliverable to her ZIP — the same gate ordering enforces. A definite
+   * "no dates" or "not that date" refuses; network trouble throws.
+   */
+  async preflight({ mission, product, address }) {
+    if (!product.vendorSku) {
+      return { ok: false, reason: `${product.name} has no Florist One product code.` };
+    }
+    const zip = address.postal_code.trim();
+    const dates = await availableDeliveryDates(zip);
+    if (!dates.includes(mission.deliver_on)) {
+      return {
+        ok: false,
+        reason:
+          dates.length === 0
+            ? `Florist One serves no delivery dates for ${zip}.`
+            : `No florist can deliver to ${zip} on ${mission.deliver_on}.`,
+      };
+    }
+    return { ok: true };
+  },
+
   async placeOrder(request: OrderRequest): Promise<OrderResult> {
     const { mission, product, address } = request;
 

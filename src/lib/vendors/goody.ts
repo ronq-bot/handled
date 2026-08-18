@@ -302,6 +302,30 @@ export function orderBatchBody(
 export const goodyAdapter: FulfillmentAdapter = {
   id: "goody",
 
+  /**
+   * The same questions ordering would ask — is the product still active,
+   * shippable to her state, and are our recorded variants still offered —
+   * days early, with nothing sent. Network trouble throws (inconclusive);
+   * only a definite refusal returns ok:false.
+   */
+  async preflight(request) {
+    const { product, address } = request;
+    if (!product.vendorSku) {
+      return { ok: false, reason: `${product.name} has no Goody product id.` };
+    }
+    const lookup = await call<{ data?: GoodyProduct } & GoodyProduct>(
+      `/products/${encodeURIComponent(product.vendorSku)}`,
+    );
+    const goodyProduct = lookup.data ?? lookup;
+
+    const refusal = rejectionReason(goodyProduct, address.state, product.name);
+    if (refusal) return { ok: false, reason: refusal };
+
+    const variants = resolveVariants(goodyProduct, product.vendorVariants, product.name);
+    if ("error" in variants) return { ok: false, reason: variants.error };
+    return { ok: true };
+  },
+
   async placeOrder(request: OrderRequest): Promise<OrderResult> {
     const { mission, product, address } = request;
 
