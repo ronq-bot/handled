@@ -1,6 +1,8 @@
 import { requireUser } from "@/lib/auth";
 import { SectionHeading } from "@/components/ui";
-import { CATEGORY_LABELS } from "@/lib/catalog";
+import { CATEGORY_LABELS, formatMoney, getVendor } from "@/lib/catalog";
+import { isOperator } from "@/lib/env";
+import { houseLedger } from "@/lib/queries";
 import {
   coverageSummary,
   coverageWithStatus,
@@ -22,9 +24,12 @@ const TONE: Record<Readiness, string> = {
 const ORDER: Readiness[] = ["live", "self-serve", "apply", "manual"];
 
 export default async function CoveragePage() {
-  await requireUser();
+  const user = await requireUser();
   const rows = coverageWithStatus();
   const summary = coverageSummary();
+  // The commission ledger is the house's own number and must never reach a
+  // member's screen — it renders only for the operator.
+  const ledger = isOperator(user.email) ? await houseLedger() : null;
 
   return (
     <div className="space-y-16">
@@ -127,6 +132,73 @@ export default async function CoveragePage() {
           </section>
         );
       })}
+
+      {/* ── The house ledger (operator only) ─────────────────── */}
+      {ledger && (
+        <section className="card border-brass/40 p-9">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 className="display-3 text-ink">The house ledger</h2>
+            <span className="tag border-brass/60 text-brass-deep">Operator view</span>
+          </div>
+          <p className="mt-3 max-w-2xl text-muted">
+            Commission earned on every order actually placed, at the rate that applied when it went
+            in. Members never see this section.
+          </p>
+
+          {ledger.length === 0 ? (
+            <p className="mt-6 text-muted">
+              Nothing placed yet — the ledger starts the moment the first order goes in.
+            </p>
+          ) : (
+            <>
+              <div className="mt-7 overflow-x-auto">
+                <table className="w-full min-w-[28rem] text-left text-[0.9375rem]">
+                  <thead>
+                    <tr className="smallcaps-quiet border-b border-line">
+                      <th className="py-2 pr-4 font-medium">Supplier</th>
+                      <th className="py-2 pr-4 font-medium">Orders</th>
+                      <th className="py-2 pr-4 font-medium">Sales</th>
+                      <th className="py-2 font-medium">Our commission</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledger.map((row) => (
+                      <tr key={row.vendor_id} className="border-b border-line">
+                        <td className="py-3 pr-4 font-semibold">
+                          {getVendor(row.vendor_id)?.name ?? row.vendor_id}
+                        </td>
+                        <td className="py-3 pr-4 text-muted">{row.orders}</td>
+                        <td className="py-3 pr-4 text-muted">{formatMoney(row.sales_cents)}</td>
+                        <td className="py-3 font-mono text-forest">
+                          {formatMoney(row.affiliate_cents)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td className="py-3 pr-4 font-semibold">Total</td>
+                      <td className="py-3 pr-4 text-muted">
+                        {ledger.reduce((n, r) => n + r.orders, 0)}
+                      </td>
+                      <td className="py-3 pr-4 text-muted">
+                        {formatMoney(ledger.reduce((n, r) => n + r.sales_cents, 0))}
+                      </td>
+                      <td className="py-3 font-mono font-semibold text-forest">
+                        {formatMoney(ledger.reduce((n, r) => n + r.affiliate_cents, 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="mt-4 text-[0.8125rem] text-faint">
+                In production, set <code className="font-mono">HANDLED_ADMIN_EMAILS</code> to the
+                addresses allowed to see this. Unset, it shows to nobody there.
+              </p>
+            </>
+          )}
+        </section>
+      )}
 
       {/* ── The honest footnote ──────────────────────────────── */}
       <section className="card p-9">

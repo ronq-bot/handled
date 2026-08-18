@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getOccasion, getRecipient, listAddresses, recentProductIds } from "@/lib/queries";
+import {
+  getOccasion,
+  getRecipient,
+  listAddresses,
+  missedProductIds,
+  recentProductIds,
+} from "@/lib/queries";
 import { browseGifts, rankGifts } from "@/lib/picker";
 import { planDelivery } from "@/lib/scheduling";
 import { formatMoney, getVendor, OCCASION_LABELS, CATEGORY_LABELS } from "@/lib/catalog";
@@ -31,9 +37,10 @@ export default async function PlanPage({
   const recipient = await getRecipient(user.id, occasion.recipient_id);
   if (!recipient) notFound();
 
-  const [addresses, recent] = await Promise.all([
+  const [addresses, recent, missed] = await Promise.all([
     listAddresses(user.id, recipient.id),
     recentProductIds(user.id, recipient.id),
+    missedProductIds(user.id, recipient.id),
   ]);
   if (addresses.length === 0) redirect(`/dashboard/people?needAddress=${recipient.id}`);
 
@@ -52,6 +59,7 @@ export default async function PlanPage({
     occasionKind: occasion.kind,
     budgetCents: budget * 100,
     recentProductIds: recent,
+    vetoProductIds: missed,
   };
   const ranked = rankGifts(pickInput);
 

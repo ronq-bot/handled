@@ -8,6 +8,11 @@ export type PickInput = {
   budgetCents: number;
   /** Most recent first — used to keep three birthdays in a row from all being roses. */
   recentProductIds?: string[];
+  /**
+   * Products the member said missed the mark for this recipient. A hard rule,
+   * not a score — a known mistake never comes back on its own.
+   */
+  vetoProductIds?: string[];
 };
 
 export type GiftPick = {
@@ -40,6 +45,7 @@ export function rankGifts(input: PickInput): GiftPick[] {
   const dislikes = words(recipient.dislikes);
   const allergies = words(recipient.allergies);
   const recent = input.recentProductIds ?? [];
+  const vetoed = new Set(input.vetoProductIds ?? []);
 
   const ranked: GiftPick[] = [];
 
@@ -47,6 +53,7 @@ export function rankGifts(input: PickInput): GiftPick[] {
     const reasons: string[] = [];
     const warnings: string[] = [];
 
+    if (vetoed.has(product.id)) continue;
     if (product.priceCents > budgetCents) continue;
     if (address.kind === "work" && !product.workFriendly) continue;
 
@@ -143,6 +150,9 @@ export function browseGifts(input: PickInput, query = ""): CatalogueEntry[] {
     if (scored) return { ...scored, cautions: [] };
 
     const cautions: string[] = [];
+    if ((input.vetoProductIds ?? []).includes(product.id)) {
+      cautions.push("You told us this one missed the mark last time.");
+    }
     const allergyHit = product.allergens.find((a) => matches(a, allergies));
     if (allergyHit) {
       cautions.push(`She has listed a ${allergyHit} allergy, and this contains it.`);

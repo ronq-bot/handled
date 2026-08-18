@@ -92,6 +92,52 @@ export async function recentProductIds(userId: string, recipientId: string): Pro
   return rows.map((r) => r.product_id).filter(Boolean);
 }
 
+export type LedgerRow = {
+  vendor_id: string;
+  orders: number;
+  sales_cents: number;
+  affiliate_cents: number;
+};
+
+/**
+ * The house's commission ledger: every order actually placed, across all
+ * accounts, grouped by supplier. Operator-facing only — the caller must gate
+ * this behind isOperator() before any of it reaches a page.
+ */
+export async function houseLedger(): Promise<LedgerRow[]> {
+  const db = await getDb();
+  const rows = await db.all<LedgerRow>(
+    `SELECT vendor_id, COUNT(*) AS orders,
+            SUM(price_cents) AS sales_cents, SUM(affiliate_cents) AS affiliate_cents
+     FROM missions WHERE status IN ('placed', 'shipped', 'delivered')
+     GROUP BY vendor_id`,
+  );
+  // Postgres hands SUM/COUNT back as strings; SQLite as numbers. Normalise.
+  return rows
+    .map((r) => ({
+      vendor_id: r.vendor_id,
+      orders: Number(r.orders),
+      sales_cents: Number(r.sales_cents),
+      affiliate_cents: Number(r.affiliate_cents),
+    }))
+    .sort((a, b) => b.affiliate_cents - a.affiliate_cents);
+}
+
+/**
+ * Products the member marked "miss" after delivery, for this recipient.
+ * The picker treats these as hard vetoes — a gift that already landed badly
+ * once is worse than repetitive, it's a known mistake.
+ */
+export async function missedProductIds(userId: string, recipientId: string): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.all<{ product_id: string }>(
+    `SELECT DISTINCT product_id FROM missions
+     WHERE user_id = ? AND recipient_id = ? AND feedback = 'miss'`,
+    [userId, recipientId],
+  );
+  return rows.map((r) => r.product_id).filter(Boolean);
+}
+
 export type UpcomingOccasion = Occasion & {
   /** For recurring dates this is the next time it comes around, not the original year. */
   nextDate: string;

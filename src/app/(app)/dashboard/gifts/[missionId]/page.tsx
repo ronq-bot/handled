@@ -14,7 +14,7 @@ import { StatusPill } from "@/components/ui";
 import { ProductImage } from "@/components/product-image";
 import { MissionProgress } from "@/components/mission-progress";
 import { ConfirmSubmit } from "@/components/confirm-submit";
-import { cancelMissionAction, retryMissionAction } from "../../../actions";
+import { cancelMissionAction, recordFeedbackAction, retryMissionAction } from "../../../actions";
 
 export const metadata = { title: "Gift detail — Handled" };
 export const dynamic = "force-dynamic";
@@ -131,6 +131,49 @@ export default async function MissionPage({
           <div className="mt-5 rounded-xl border border-line bg-bone-2 p-4">
             <div className="label mb-1">Card message</div>
             <p className="italic">&ldquo;{mission.gift_message}&rdquo;</p>
+          </div>
+        )}
+
+        {mission.status === "delivered" && (
+          <div className="mt-5 rounded-xl border border-line bg-bone-2 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-semibold">Did it land?</div>
+                <p className="mt-0.5 text-sm text-muted">
+                  {mission.feedback === "hit"
+                    ? "Noted — more where that came from."
+                    : mission.feedback === "miss"
+                      ? "Noted — we will never pick this one for her again."
+                      : "One tap teaches Auto-Pilot. A miss is never picked for her again."}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <form action={recordFeedbackAction}>
+                  <input type="hidden" name="id" value={mission.id} />
+                  <input type="hidden" name="verdict" value="hit" />
+                  <button
+                    type="submit"
+                    className={`btn min-h-9 px-4 py-1.5 text-sm ${
+                      mission.feedback === "hit" ? "btn-primary" : "btn-quiet"
+                    }`}
+                  >
+                    She loved it
+                  </button>
+                </form>
+                <form action={recordFeedbackAction}>
+                  <input type="hidden" name="id" value={mission.id} />
+                  <input type="hidden" name="verdict" value="miss" />
+                  <button
+                    type="submit"
+                    className={`btn min-h-9 px-4 py-1.5 text-sm ${
+                      mission.feedback === "miss" ? "btn-primary" : "btn-quiet"
+                    }`}
+                  >
+                    Not quite
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
         )}
 

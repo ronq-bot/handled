@@ -14,6 +14,7 @@ import {
   getRecipient,
   listAddresses,
   logMissionEvent,
+  missedProductIds,
   recentProductIds,
 } from "@/lib/queries";
 import { addDays, fromUtc, nextAnniversary, today, toUtc } from "@/lib/date";
@@ -291,6 +292,7 @@ export async function scheduleMissionAction(formData: FormData): Promise<void> {
       occasionKind: occasion.kind,
       budgetCents,
       recentProductIds: await recentProductIds(user.id, occasion.recipient_id),
+      vetoProductIds: await missedProductIds(user.id, occasion.recipient_id),
     });
     if (!pick) return;
     productId = pick.product.id;
@@ -400,6 +402,7 @@ export async function retryMissionAction(formData: FormData): Promise<void> {
     occasionKind: occasion?.kind ?? "just_because",
     budgetCents: mission.budget_cents,
     recentProductIds: [mission.product_id],
+    vetoProductIds: await missedProductIds(user.id, mission.recipient_id),
   });
   if (!pick) return;
 
@@ -418,6 +421,36 @@ export async function retryMissionAction(formData: FormData): Promise<void> {
     id,
     user.id,]);
   await logMissionEvent(id, "scheduled", `Rescued with ${pick.product.name}, delivering ${deliverOn}.`);
+  refreshApp();
+}
+
+/**
+ * "Did it land?" — a verdict on a delivered gift. 'miss' becomes a standing
+ * veto: the picker never chooses that product for this recipient again.
+ */
+export async function recordFeedbackAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const db = await getDb();
+  const id = s(formData, "id");
+  const verdict = s(formData, "verdict");
+  if (!["hit", "miss"].includes(verdict)) return;
+
+  const mission = await getMission(user.id, id);
+  // Only a delivered gift can honestly be judged.
+  if (!mission || mission.status !== "delivered") return;
+
+  await db.run(
+    `UPDATE missions SET feedback = ?, updated_at = ?
+     WHERE id = ? AND user_id = ? AND status = 'delivered'`,
+    [verdict, nowIso(), id, user.id],
+  );
+  await logMissionEvent(
+    id,
+    "delivered",
+    verdict === "hit"
+      ? "Marked a hit — more like this."
+      : "Marked a miss — never picking this one for her again.",
+  );
   refreshApp();
 }
 
