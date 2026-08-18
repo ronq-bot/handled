@@ -178,6 +178,20 @@ export function emailRescued(
   });
 }
 
+export function emailPasswordReset(o: { to: string; firstName: string; resetUrl: string }) {
+  return send({
+    to: o.to,
+    subject: "Reset your password — Handled",
+    heading: "Locked out. Fixable.",
+    body: [
+      `${esc(o.firstName)}, someone — hopefully you — asked to reset the password on this account.`,
+      `<a href="${o.resetUrl}" style="color:#1f3d2b">Choose a new password →</a>`,
+      `The link works once and expires in an hour. If this wasn't you, do nothing — the account stays exactly as it is.`,
+    ],
+    footer: "Nobody at Handled will ever ask you for your password.",
+  });
+}
+
 export function emailFailed(o: OrderMail & { reason: string; fixUrl: string }) {
   return send({
     to: o.to,

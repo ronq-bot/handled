@@ -1252,4 +1252,63 @@ check("without Stripe, chargeability falls back to the local flag", () => {
   console.log("  ok  an unpaid account is refused with a readable reason");
 }
 
+console.log("\npassword reset");
+
+const { hashPassword, verifyPassword, createResetToken, resetPasswordWithToken } = await import(
+  "../src/lib/auth.ts"
+);
+
+check("password hashing round-trips and rejects the wrong password", () => {
+  const stored = hashPassword("correct horse battery");
+  assert.equal(verifyPassword("correct horse battery", stored), true);
+  assert.equal(verifyPassword("incorrect horse", stored), false);
+  assert.notEqual(hashPassword("same input"), hashPassword("same input"), "salts must differ");
+});
+
+{
+  const userId = newId("usr");
+  await db.run(
+    `INSERT INTO users (id, email, password_hash, name, created_at) VALUES (?, ?, ?, 'Mike', ?)`,
+    [userId, `${userId}@example.com`, hashPassword("original-pass"), nowIso()],
+  );
+  await db.run(
+    `INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)`,
+    [newId("ses"), userId, new Date(Date.now() + 86_400_000).toISOString(), nowIso()],
+  );
+
+  const token = await createResetToken(userId);
+  const row = await db.get(`SELECT reset_token_hash FROM users WHERE id = ?`, [userId]);
+  assert.notEqual(row.reset_token_hash, token, "only the hash may be stored");
+  assert.equal(await resetPasswordWithToken("not-the-token", "whatever-123"), false);
+
+  assert.equal(await resetPasswordWithToken(token, "brand-new-pass"), true);
+  const after = await db.get(
+    `SELECT password_hash, reset_token_hash FROM users WHERE id = ?`,
+    [userId],
+  );
+  assert.equal(verifyPassword("brand-new-pass", after.password_hash), true);
+  assert.equal(after.reset_token_hash, "", "the token must clear on use");
+  assert.equal(await resetPasswordWithToken(token, "third-pass-999"), false, "single use only");
+  const sessions = await db.get(`SELECT COUNT(*) AS n FROM sessions WHERE user_id = ?`, [userId]);
+  assert.equal(Number(sessions.n), 0, "a reset must sign out every device");
+  passed += 1;
+  console.log("  ok  the reset token is hashed, single-use, and revokes every session");
+}
+
+{
+  // An expired token is as good as no token.
+  const userId = newId("usr");
+  await db.run(
+    `INSERT INTO users (id, email, password_hash, name, created_at) VALUES (?, ?, 'x', 'Mike', ?)`,
+    [userId, `${userId}@example.com`, nowIso()],
+  );
+  const token = await createResetToken(userId);
+  await db.run(`UPDATE users SET reset_token_expires = '2000-01-01T00:00:00.000Z' WHERE id = ?`, [
+    userId,
+  ]);
+  assert.equal(await resetPasswordWithToken(token, "too-late-pass"), false);
+  passed += 1;
+  console.log("  ok  an expired reset token is refused");
+}
+
 console.log(`\n${passed} checks passed\n`);
