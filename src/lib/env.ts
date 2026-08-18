@@ -45,6 +45,15 @@ export const env = {
 
   floristOneUser: read("FLORIST_ONE_API_USER"),
   floristOnePassword: read("FLORIST_ONE_API_PASSWORD"),
+  /**
+   * The card each flower order is paid with (their affiliate model: our card
+   * pays, they commission back). While the API key is in Test mode this is
+   * their documented test card and nothing ships; in Live mode it is the
+   * company card — treat these like the Stripe secret. Expiration is MMYYYY.
+   */
+  floristOneCardNumber: read("FLORIST_ONE_CARD_NUMBER"),
+  floristOneCardExp: read("FLORIST_ONE_CARD_EXP"),
+  floristOneCardCvv: read("FLORIST_ONE_CARD_CVV"),
 
   giftbitApiKey: read("GIFTBIT_API_KEY"),
   /** "production" switches off the testbed host. Anything else stays sandboxed. */

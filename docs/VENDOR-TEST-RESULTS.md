@@ -1,5 +1,40 @@
 # Vendor test results
 
+## Florist One — Test mode, 2026-08-17
+
+**Order 351097894 placed through the real adapter.** API key approved in Test
+mode (no flowers ship, their documented test card pays). The full pipeline ran
+live: catalogue (12 products) → `checkdeliverydate` for 28202 (real dates,
+Sundays absent exactly as documented) → `gettotal` (T50-3A at $94.95 lands at
+**$122.99** with their $19.99 delivery fee and $8.05 tax) → Authorize.net
+tokenization → `placeorder` accepted.
+
+Contact with the live API rewrote the adapter — every guessed detail was wrong
+and is now real:
+
+- The delivery-dates endpoint is **`checkdeliverydate`**, not `getdeliverydates`
+  (which does not exist — the first production order would have failed).
+- `placeorder` is **POST with a JSON body** of uppercase structures
+  (`customer` / `products[].RECIPIENT` / `ccinfo` / `ordertotal`), not GET with
+  flat query params.
+- Payment is a **single-use Authorize.net token** per order: `getauthorizenetkey`
+  hands over a public client key (and says which gateway environment —
+  `jstest` = sandbox), the card in `FLORIST_ONE_CARD_*` env vars is tokenized
+  against it, and the token rides in `ccinfo`. In Test mode that card is their
+  documented `4242…` test card; in Live mode it becomes the company card.
+- `ordertotal` must be *their* number — the adapter asks `gettotal` first, which
+  also yields the true landed cost per order (logged on every placement).
+- Card messages cap at **200** characters (ours allowed 250); the customer block
+  carries the buyer's name with OUR operations email, so supplier
+  correspondence never reaches him and the white label holds.
+
+Before Live mode: contact brian@floristone.com for the application review, swap
+`FLORIST_ONE_CARD_*` to the company card, remove `FLORIST_ONE_TEST_MODE`, and
+map the three flower products to chosen codes (sync currently matches by
+nearest price: 3/3 matched with real photography).
+
+---
+
 **Date:** 2026-08-17
 **Target:** Goody SANDBOX (`api.sandbox.ongoody.com`) — nothing charged, no real money can move.
 
