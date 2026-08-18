@@ -174,15 +174,18 @@ async function floristOne() {
       line("  the API key is still in Test mode (their email says so until Live approval).\n");
       return;
     }
+    // --florist-code=FAA-125 orders a specific catalogue code; default is the first.
+    const wanted = [...flags].find((f) => f.startsWith("--florist-code="))?.split("=")[1];
+    const pick = wanted ? catalogue.find((p) => p.CODE === wanted) : sample;
     const deliverOn = list[2] ?? list[0];
-    if (!sample?.CODE || !deliverOn) {
-      line("  --order-florist: no product or date available to order against.\n");
+    if (!pick?.CODE || !deliverOn) {
+      line(`  --order-florist: ${wanted ? `code ${wanted} is not in their catalogue` : "no product or date available"}.\n`);
       return;
     }
-    line(`  placing ONE Test-mode order (${sample.CODE}, delivery ${deliverOn}) through the real adapter…`);
+    line(`  placing ONE Test-mode order (${pick.CODE} — ${pick.NAME}, delivery ${deliverOn}) through the real adapter…`);
     const result = await floristOneAdapter.placeOrder({
       mission: { id: `test_${crypto.randomUUID().slice(0, 12)}`, gift_message: "Adapter test drive — Test-mode order. — Handled", deliver_on: deliverOn },
-      product: { id: "test_flowers", name: sample.NAME ?? "Test bouquet", priceCents: Math.round(Number(sample.PRICE) * 100), vendorSku: sample.CODE },
+      product: { id: "test_flowers", name: pick.NAME ?? "Test bouquet", priceCents: Math.round(Number(pick.PRICE) * 100), vendorSku: pick.CODE },
       recipient: { name: "Test Recipient" },
       address: { line1: "412 Rosewood Ln", line2: "", city: "Charlotte", state: "NC", postal_code: zip, country: "US" },
       buyer: { name: "Handled Test", email: "test@floristone.com" },
