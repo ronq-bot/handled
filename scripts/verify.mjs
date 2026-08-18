@@ -193,6 +193,36 @@ check("auto-pilot does not repeat the most recent gift", () => {
   assert.notEqual(second.product.id, first.product.id);
 });
 
+check("a gift marked as a miss is never picked again for that recipient", () => {
+  const first = autoPick({
+    recipient: dana,
+    address: workAddress,
+    occasionKind: "birthday",
+    budgetCents: 12000,
+  });
+  const after = rankGifts({
+    recipient: dana,
+    address: workAddress,
+    occasionKind: "birthday",
+    budgetCents: 12000,
+    vetoProductIds: [first.product.id],
+  });
+  assert.equal(
+    after.some((r) => r.product.id === first.product.id),
+    false,
+    "a vetoed product must not be ranked at all",
+  );
+});
+
+check("browsing labels a vetoed product instead of hiding it", () => {
+  const input = { recipient: dana, address: homeAddress, occasionKind: "birthday", budgetCents: 12000 };
+  const target = rankGifts(input)[0];
+  const entries = browseGifts({ ...input, vetoProductIds: [target.product.id] });
+  const entry = entries.find((e) => e.product.id === target.product.id);
+  assert.ok(entry, "the vetoed product must still appear in the catalogue");
+  assert.match(entry.cautions.join(" "), /missed the mark/i);
+});
+
 check("an experience gift says plainly that it comes to him, not to her", () => {
   const pick = rankGifts({
     recipient: dana,
@@ -436,6 +466,33 @@ const status = async (id) => (await db.get(`SELECT status FROM missions WHERE id
   assert.ok(note, "the timeline must record the rescue");
   passed += 1;
   console.log("  ok  Auto-Pilot rescues a refused product instead of filing homework");
+}
+
+{
+  // Feedback closes the loop: learn what a rescue would pick, mark that
+  // product a delivered miss for a fresh account, and the next rescue for
+  // that recipient must steer around it.
+  const probeId = await seed({ productId: "wine_duo_reserve", autoPilot: 1 });
+  await runDispatch("2026-08-18");
+  const wouldPick = (await db.get(`SELECT product_id FROM missions WHERE id = ?`, [probeId]))
+    .product_id;
+
+  const id = await seed({ productId: "wine_duo_reserve", autoPilot: 1 });
+  const m = await db.get(`SELECT user_id, occasion_id, recipient_id, address_id FROM missions WHERE id = ?`, [id]);
+  await db.run(
+    `INSERT INTO missions (id, user_id, occasion_id, recipient_id, address_id, product_id,
+       deliver_on, ship_on, status, feedback, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, '2026-05-01', '2026-04-29', 'delivered', 'miss', ?, ?)`,
+    [newId("msn"), m.user_id, m.occasion_id, m.recipient_id, m.address_id, wouldPick, nowIso(), nowIso()],
+  );
+
+  await runDispatch("2026-08-18");
+  assert.equal(await status(id), "scheduled", "the rescue must still succeed");
+  const row = await db.get(`SELECT product_id FROM missions WHERE id = ?`, [id]);
+  assert.notEqual(row.product_id, "wine_duo_reserve");
+  assert.notEqual(row.product_id, wouldPick, "a delivered miss must never be picked again");
+  passed += 1;
+  console.log("  ok  a rescue never reaches for a product she already called a miss");
 }
 
 {

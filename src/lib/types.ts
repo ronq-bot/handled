@@ -98,6 +98,8 @@ export type Mission = {
   affiliate_cents: number;
   /** Carrier tracking link, when the vendor reports one. Empty until then. */
   tracking_url: string;
+  /** The member's verdict on a delivered gift: '' until rated. */
+  feedback: "" | "hit" | "miss";
   created_at: string;
   updated_at: string;
 };

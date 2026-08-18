@@ -16,7 +16,7 @@ import {
   emailUpcomingOrder,
 } from "./email";
 import { env } from "./env";
-import { getOccasion, logMissionEvent, recentProductIds } from "./queries";
+import { getOccasion, logMissionEvent, missedProductIds, recentProductIds } from "./queries";
 import { addDays, daysBetween, today, type IsoDate } from "./date";
 import type { Address, Mission, Recipient, User } from "./types";
 
@@ -547,6 +547,7 @@ async function failOrRescue(
             mission.product_id,
             ...(await recentProductIds(user.id, mission.recipient_id)),
           ],
+          vetoProductIds: await missedProductIds(user.id, mission.recipient_id),
         })
       : null;
 

@@ -78,7 +78,24 @@ export const env = {
   printfulStoreId: read("PRINTFUL_STORE_ID"),
 
   cronSecret: read("HANDLED_CRON_SECRET"),
+
+  /**
+   * Comma-separated emails allowed to see operator-only surfaces — the
+   * commission ledger above all, which must never reach a customer's screen.
+   * Unset, nobody sees them in production and everybody does in development,
+   * so working on them locally needs no setup.
+   */
+  adminEmails: (read("HANDLED_ADMIN_EMAILS") ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
 } as const;
+
+/** Operator check for pages that show the house's own numbers. */
+export function isOperator(email: string): boolean {
+  if (env.adminEmails.length > 0) return env.adminEmails.includes(email.trim().toLowerCase());
+  return process.env.NODE_ENV !== "production";
+}
 
 /**
  * True when any configured vendor places orders that cost real money —
