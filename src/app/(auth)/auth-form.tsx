@@ -22,8 +22,18 @@ export function AuthForm({
 }) {
   const [state, formAction] = useActionState(action, {});
 
+  // The browser knows the timezone; the server never has to ask. Sent on
+  // both login and signup so a member who moves gets corrected silently.
+  let timezone = "";
+  try {
+    timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+  } catch {
+    /* stays "" — the server keeps its default */
+  }
+
   return (
     <form action={formAction} className="space-y-4">
+      <input type="hidden" name="timezone" value={timezone} />
       {mode === "signup" && (
         <div>
           <label className="label" htmlFor="name">

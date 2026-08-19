@@ -2,9 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { listRecipients } from "@/lib/queries";
-import { OCCASION_LABELS } from "@/lib/catalog";
 import { SectionHeading } from "@/components/ui";
 import { createOccasionAction } from "../../../actions";
+import { DateFields } from "./date-fields";
 import type { OccasionKind } from "@/lib/types";
 
 export const metadata = { title: "Add a date — Handled" };
@@ -53,26 +53,7 @@ export default async function NewDatePage({
             </select>
           </div>
 
-          <div>
-            <label className="label" htmlFor="kind">Type of date</label>
-            <select id="kind" name="kind" className="field" defaultValue="birthday">
-              {(Object.keys(OCCASION_LABELS) as OccasionKind[]).map((k) => (
-                <option key={k} value={k}>
-                  {OCCASION_LABELS[k]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="label" htmlFor="title">What to call it</label>
-            <input id="title" name="title" className="field" placeholder="Dana's birthday" />
-          </div>
-
-          <div>
-            <label className="label" htmlFor="event_date">The date</label>
-            <input id="event_date" name="event_date" type="date" className="field" required />
-          </div>
+          <DateFields />
         </div>
 
         <label className="choice">

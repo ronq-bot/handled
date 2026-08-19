@@ -40,6 +40,25 @@ export async function findUserByEmail(email: string): Promise<User | undefined> 
   return db.get<User>(`SELECT * FROM users WHERE email = ?`, [email.toLowerCase().trim()]);
 }
 
+/**
+ * Stores the browser-reported IANA timezone, validating it the only reliable
+ * way — asking Intl. Junk (or an empty report) changes nothing.
+ */
+export async function setTimezone(userId: string, timezone: string): Promise<void> {
+  if (!timezone) return;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone });
+  } catch {
+    return;
+  }
+  const db = await getDb();
+  await db.run(`UPDATE users SET timezone = ? WHERE id = ? AND timezone != ?`, [
+    timezone,
+    userId,
+    timezone,
+  ]);
+}
+
 const RESET_MINUTES = 60;
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");

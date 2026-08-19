@@ -102,3 +102,33 @@ export function formatTime(hhmm: string): string {
   const hour = h % 12 === 0 ? 12 : h % 12;
   return m === 0 ? `${hour}${suffix}` : `${hour}:${String(m).padStart(2, "0")}${suffix}`;
 }
+
+/**
+ * The next occurrence of a fixed-calendar holiday, so the form can fill in
+ * dates nobody should have to type. Mother's Day (US) is the second Sunday
+ * of May; the others never move. Returns null for kinds that are personal —
+ * we can never guess a birthday.
+ */
+export function nextFixedHoliday(
+  kind: string,
+  from: IsoDate = today(),
+): IsoDate | null {
+  const year = Number(from.slice(0, 4));
+
+  const candidate = (y: number): IsoDate | null => {
+    if (kind === "valentines") return `${y}-02-14`;
+    if (kind === "christmas") return `${y}-12-25`;
+    if (kind === "mothers_day") {
+      // Second Sunday of May: May 1's weekday decides how far to the first
+      // Sunday, then one more week.
+      const may1 = toUtc(`${y}-05-01`);
+      const toSunday = (7 - may1.getUTCDay()) % 7;
+      return fromUtc(new Date(may1.getTime() + (toSunday + 7) * DAY_MS));
+    }
+    return null;
+  };
+
+  const thisYear = candidate(year);
+  if (thisYear === null) return null;
+  return thisYear >= from ? thisYear : candidate(year + 1);
+}
