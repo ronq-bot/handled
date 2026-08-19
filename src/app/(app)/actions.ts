@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { endSession, requireUser } from "@/lib/auth";
 import { getDb, newId, nowIso } from "@/lib/db";
 import { getProduct } from "@/lib/catalog";
 import { planDelivery } from "@/lib/scheduling";
 import { autoPick } from "@/lib/picker";
 import {
+  deleteAccount,
   getAddress,
   getMission,
   getOccasion,
@@ -506,6 +507,18 @@ export async function recordFeedbackAction(formData: FormData): Promise<void> {
       : "Marked a miss — never picking this one for her again.",
   );
   refreshApp();
+}
+
+/** The whole account, gone — except an order already paid for and moving. */
+export async function deleteAccountAction(): Promise<void> {
+  const user = await requireUser();
+  const result = await deleteAccount(user.id);
+  if (!result.ok) {
+    redirect("/dashboard/settings?account=inflight");
+  }
+  // Sessions are already gone from the database; this clears the cookie.
+  await endSession();
+  redirect("/?deleted=1");
 }
 
 /* ── Settings ───────────────────────────────────────────────── */

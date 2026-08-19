@@ -92,6 +92,37 @@ export async function recentProductIds(userId: string, recipientId: string): Pro
   return rows.map((r) => r.product_id).filter(Boolean);
 }
 
+/**
+ * Deletes the account and everything under it — refused while an order is
+ * actually moving, because a paid, placed gift will arrive whether or not
+ * the account exists, and its record should too.
+ */
+export async function deleteAccount(
+  userId: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const db = await getDb();
+  const inFlight = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM missions WHERE user_id = ? AND status IN ('placed', 'shipped')`,
+    [userId],
+  );
+  if (Number(inFlight?.n ?? 0) > 0) {
+    return {
+      ok: false,
+      reason: "An order is already placed and moving. Once it lands, deletion works.",
+    };
+  }
+
+  await db.run(
+    `DELETE FROM mission_events WHERE mission_id IN (SELECT id FROM missions WHERE user_id = ?)`,
+    [userId],
+  );
+  for (const table of ["missions", "occasions", "addresses", "recipients", "sessions"]) {
+    await db.run(`DELETE FROM ${table} WHERE user_id = ?`, [userId]);
+  }
+  await db.run(`DELETE FROM users WHERE id = ?`, [userId]);
+  return { ok: true };
+}
+
 export type LedgerRow = {
   vendor_id: string;
   orders: number;
