@@ -7,7 +7,7 @@ import { countdown, formatLong, formatShort, monthLabel } from "@/lib/date";
 import { RiskMeter } from "@/components/risk-meter";
 import { EmptyState, Stat, StatusPill } from "@/components/ui";
 import { ProductImage } from "@/components/product-image";
-import { runDispatchAction, seedDemoAction } from "../actions";
+import { coverEverythingAction, runDispatchAction, seedDemoAction } from "../actions";
 
 export const metadata = { title: "Overview — Handled" };
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ scheduled?: string; seeded?: string }>;
+  searchParams: Promise<{ scheduled?: string; seeded?: string; covered?: string; of?: string }>;
 }) {
   const params = await searchParams;
   const user = await requireUser();
@@ -44,11 +44,20 @@ export default async function DashboardPage({
     <div className="space-y-10">
       {params.scheduled && <Banner text="Locked in. That date is handled." />}
       {params.seeded && <Banner text="Demo year loaded — Aug 20 birthday and Sep 25 anniversary." />}
+      {params.covered && (
+        <Banner
+          text={
+            Number(params.covered) === Number(params.of ?? params.covered)
+              ? `Done — ${params.covered} date${Number(params.covered) === 1 ? " is" : "s are"} now covered. That was the whole product.`
+              : `Covered ${params.covered} of ${params.of} dates. The rest need something from you — an address, a bigger budget, or more runway.`
+          }
+        />
+      )}
 
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div>
           <h1 className="display-2">
-            {greeting()}, {user.name.split(" ")[0] || "chief"}.
+            {greeting(user.timezone)}, {user.name.split(" ")[0] || "chief"}.
           </h1>
           <p className="mt-3 max-w-xl text-muted">
             {nextUp ? (
@@ -63,7 +72,21 @@ export default async function DashboardPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/dashboard/dates/new" className="btn btn-primary">
+          {uncovered.length > 0 && (
+            <form action={coverEverythingAction}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                title="Auto-Pilot schedules a gift for every unprotected date."
+              >
+                Cover everything ({uncovered.length})
+              </button>
+            </form>
+          )}
+          <Link
+            href="/dashboard/dates/new"
+            className={uncovered.length > 0 ? "btn btn-quiet" : "btn btn-primary"}
+          >
             Add a date
           </Link>
           <Link href="/dashboard/send" className="btn btn-quiet" title="No occasion required.">
@@ -303,8 +326,18 @@ function addressSummary(a: { kind: string; city: string }) {
   return `${where}, ${a.city}`;
 }
 
-function greeting(): string {
-  const hour = new Date().getUTCHours();
+function greeting(timeZone: string): string {
+  let hour: number;
+  try {
+    hour = Number(
+      new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone }).format(
+        new Date(),
+      ),
+    );
+  } catch {
+    // A junk timezone string must never crash the dashboard's first line.
+    hour = new Date().getUTCHours();
+  }
   if (hour < 11) return "Morning";
   if (hour < 18) return "Afternoon";
   return "Evening";

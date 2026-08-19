@@ -17,8 +17,9 @@ import {
   logMissionEvent,
   missedProductIds,
   recentProductIds,
+  upcomingOccasions,
 } from "@/lib/queries";
-import { addDays, fromUtc, nextAnniversary, today, toUtc } from "@/lib/date";
+import { addDays, fromUtc, nextAnniversary, nextFixedHoliday, today, toUtc } from "@/lib/date";
 import { runDispatch } from "@/lib/dispatcher";
 import { paymentsAreLive, removeCard } from "@/lib/payments";
 import type { AddressKind, OccasionKind } from "@/lib/types";
@@ -183,8 +184,9 @@ export async function createOccasionAction(formData: FormData): Promise<void> {
 
   // The date input guards the happy path, but a server action is a public
   // POST endpoint — a malformed date stored here would make every page that
-  // computes the next occurrence throw, bricking the whole dashboard.
-  const eventDate = s(formData, "event_date") || today();
+  // computes the next occurrence throw, bricking the whole dashboard. A blank
+  // date is legitimate for fixed holidays: we know when Valentine's Day is.
+  const eventDate = s(formData, "event_date") || nextFixedHoliday(kind) || today();
   if (!isCalendarDate(eventDate)) return;
 
   await db.run(`INSERT INTO occasions (id, user_id, recipient_id, kind, title, event_date, recurring, created_at)
@@ -376,6 +378,75 @@ export async function scheduleMissionAction(formData: FormData): Promise<void> {
 
   refreshApp();
   redirect("/dashboard?scheduled=1");
+}
+
+/**
+ * The product promise in one click: every unprotected date gets an
+ * Auto-Pilot gift scheduled against it. Dates it can't honestly cover — no
+ * address on file, nothing in budget, too late for anything to arrive — are
+ * skipped and counted, never faked.
+ */
+export async function coverEverythingAction(): Promise<void> {
+  const user = await requireUser();
+  const db = await getDb();
+  const occasions = await upcomingOccasions(user.id, 365);
+  const uncovered = occasions.filter((o) => o.missions.length === 0);
+
+  let covered = 0;
+  for (const occ of uncovered) {
+    const recipient = await getRecipient(user.id, occ.recipient_id);
+    if (!recipient) continue;
+    const addressId = await firstAddressId(user.id, occ.recipient_id);
+    const address = addressId ? await getAddress(user.id, addressId) : null;
+    if (!address) continue;
+
+    const budgetCents = 12000;
+    const pick = autoPick({
+      recipient,
+      address,
+      occasionKind: occ.kind,
+      budgetCents,
+      recentProductIds: await recentProductIds(user.id, occ.recipient_id),
+      vetoProductIds: await missedProductIds(user.id, occ.recipient_id),
+    });
+    if (!pick) continue;
+
+    const plan = planDelivery(occ.nextDate, pick.product, address);
+    if (plan.tooFar || plan.tooLate) continue;
+
+    const id = newId("msn");
+    await db.run(
+      `INSERT INTO missions
+         (id, user_id, occasion_id, recipient_id, address_id, product_id, selection_mode,
+          budget_cents, price_cents, gift_message, deliver_on, ship_on, status, vendor_id,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'auto', ?, ?, '', ?, ?, 'scheduled', ?, ?, ?)`,
+      [
+        id,
+        user.id,
+        occ.id,
+        occ.recipient_id,
+        address.id,
+        pick.product.id,
+        budgetCents,
+        pick.product.priceCents,
+        plan.deliverOn,
+        plan.shipOn,
+        pick.product.vendorId,
+        nowIso(),
+        nowIso(),
+      ],
+    );
+    await logMissionEvent(
+      id,
+      "scheduled",
+      `${pick.product.name} scheduled for ${plan.deliverOn} by "Cover everything". Order goes in ${plan.shipOn}.`,
+    );
+    covered += 1;
+  }
+
+  refreshApp();
+  redirect(`/dashboard?covered=${covered}&of=${uncovered.length}`);
 }
 
 export async function cancelMissionAction(formData: FormData): Promise<void> {

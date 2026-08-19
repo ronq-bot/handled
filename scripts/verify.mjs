@@ -16,7 +16,7 @@ process.env.HANDLED_DATA_DIR = mkdtempSync(path.join(tmpdir(), "handled-verify-"
 const { register } = await import("node:module");
 register("./ts-loader.mjs", import.meta.url);
 
-const { addDays, nextAnniversary, previousBusinessDay, daysBetween } = await import(
+const { addDays, nextAnniversary, nextFixedHoliday, previousBusinessDay, daysBetween } = await import(
   "../src/lib/date.ts"
 );
 const { planDelivery, dogHouseRisk, isFeasible, MAX_SCHEDULE_DAYS } = await import("../src/lib/scheduling.ts");
@@ -60,6 +60,17 @@ const homeAddress = { kind: "home", weekdays_only: 0 };
 const bouquet = getProduct("bouquet_garden_seasonal");
 const fruit = getProduct("fruit_bouquet_celebration");
 const engraved = getProduct("bracelet_engraved");
+
+check("fixed holidays fill their own dates, personal ones never do", () => {
+  assert.equal(nextFixedHoliday("valentines", "2026-01-10"), "2026-02-14");
+  assert.equal(nextFixedHoliday("valentines", "2026-02-15"), "2027-02-14", "past → next year");
+  assert.equal(nextFixedHoliday("valentines", "2026-02-14"), "2026-02-14", "the day itself counts");
+  assert.equal(nextFixedHoliday("christmas", "2026-08-19"), "2026-12-25");
+  // Second Sunday of May: 2026-05-10 and 2027-05-09 — both real calendar facts.
+  assert.equal(nextFixedHoliday("mothers_day", "2026-01-01"), "2026-05-10");
+  assert.equal(nextFixedHoliday("mothers_day", "2026-05-11"), "2027-05-09");
+  assert.equal(nextFixedHoliday("birthday", "2026-01-01"), null);
+});
 
 check("ship date backs off the delivery date by the vendor's lead time", () => {
   const plan = planDelivery("2026-08-20", bouquet, workAddress, "2026-07-28");

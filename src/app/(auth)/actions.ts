@@ -7,6 +7,7 @@ import {
   endSession,
   findUserByEmail,
   resetPasswordWithToken,
+  setTimezone,
   startSession,
   verifyPassword,
 } from "@/lib/auth";
@@ -30,6 +31,7 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
   if (await findUserByEmail(email)) return { error: "That email already has an account. Try logging in." };
 
   const user = await createUser(email, password, name);
+  await setTimezone(user.id, String(formData.get("timezone") ?? ""));
   await startSession(user.id);
   redirect("/onboarding");
 }
@@ -51,6 +53,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
     return { error: "Wrong email or password." };
   }
 
+  await setTimezone(user.id, String(formData.get("timezone") ?? ""));
   await startSession(user.id);
   redirect("/dashboard");
 }
