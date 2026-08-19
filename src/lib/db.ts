@@ -126,6 +126,12 @@ CREATE TABLE IF NOT EXISTS mission_events (
   at         TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_events_mission ON mission_events(mission_id);
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key       TEXT PRIMARY KEY,
+  resets_at TEXT NOT NULL,
+  count     INTEGER NOT NULL DEFAULT 0
+);
 `;
 
 /**
@@ -295,7 +301,7 @@ async function openPostgres(url: string): Promise<Database> {
   // the schema is current and one round trip replaces them all. (Point the
   // sentinel at whatever the latest migration creates.)
   const probe = await pool.query(
-    `SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'reset_token_hash'`,
+    `SELECT 1 FROM information_schema.tables WHERE table_name = 'rate_limits'`,
   );
   if (probe.rows.length === 0) {
     await pool.query(SCHEMA);

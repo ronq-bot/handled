@@ -1311,4 +1311,45 @@ check("password hashing round-trips and rejects the wrong password", () => {
   console.log("  ok  an expired reset token is refused");
 }
 
+console.log("\nrate limiting & account deletion");
+
+const { allowAttempt } = await import("../src/lib/rate-limit.ts");
+const { deleteAccount } = await import("../src/lib/queries.ts");
+
+{
+  const key = `test:${newId("key")}`;
+  for (let i = 0; i < 3; i++) {
+    assert.equal(await allowAttempt(key, 3, 900), true, `attempt ${i + 1} is inside the allowance`);
+  }
+  assert.equal(await allowAttempt(key, 3, 900), false, "the fourth attempt is refused");
+  // Force the window into the past — the next attempt starts a fresh one.
+  await db.run(`UPDATE rate_limits SET resets_at = '2000-01-01T00:00:00.000Z' WHERE key = ?`, [key]);
+  assert.equal(await allowAttempt(key, 3, 900), true, "an expired window resets the count");
+  passed += 1;
+  console.log("  ok  the limiter allows the allowance, refuses the excess, and rolls the window");
+}
+
+{
+  // Deletion is refused while an order is moving, then wipes everything.
+  const id = await seed();
+  const m = await db.get(`SELECT user_id FROM missions WHERE id = ?`, [id]);
+  await db.run(`UPDATE missions SET status = 'placed' WHERE id = ?`, [id]);
+  const refused = await deleteAccount(m.user_id);
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /placed and moving/i);
+
+  await db.run(`UPDATE missions SET status = 'delivered' WHERE id = ?`, [id]);
+  const done = await deleteAccount(m.user_id);
+  assert.equal(done.ok, true);
+  for (const table of ["users", "recipients", "addresses", "occasions", "missions", "sessions"]) {
+    const col = table === "users" ? "id" : "user_id";
+    const left = await db.get(`SELECT COUNT(*) AS n FROM ${table} WHERE ${col} = ?`, [m.user_id]);
+    assert.equal(Number(left.n), 0, `${table} must be empty for the deleted account`);
+  }
+  const events = await db.get(`SELECT COUNT(*) AS n FROM mission_events WHERE mission_id = ?`, [id]);
+  assert.equal(Number(events.n), 0, "mission events must go with their missions");
+  passed += 1;
+  console.log("  ok  deletion waits for in-flight orders, then leaves nothing behind");
+}
+
 console.log(`\n${passed} checks passed\n`);

@@ -60,7 +60,12 @@ const STEPS = [
   },
 ];
 
-export default async function LandingPage() {
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ deleted?: string }>;
+}) {
+  const { deleted } = await searchParams;
   // The header only needs "probably signed in" for its nav button — cookie
   // presence is enough, and it keeps the highest-traffic page off the
   // database entirely (the dashboard re-validates for real).
@@ -78,6 +83,14 @@ export default async function LandingPage() {
       <MarketingHeader signedIn={signedIn} />
 
       <main id="main" className="flex-1">
+        {deleted && (
+          <p
+            role="status"
+            className="container-x mt-6 rounded-xl border border-sage/40 bg-sage-tint px-4 py-3 text-center text-sm font-medium text-sage-deep"
+          >
+            Your account is gone — everything deleted, nothing archived. Thanks for trying us.
+          </p>
+        )}
         {/* ── Hero ────────────────────────────────────────────── */}
         <section className="border-b border-line">
           {/* `.enter` rather than <Reveal>: this is above the fold and must

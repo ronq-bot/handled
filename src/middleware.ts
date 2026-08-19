@@ -51,8 +51,11 @@ export function middleware(request: NextRequest) {
 export const config = {
   /**
    * Everything except Next's own assets, our product photography, and the
-   * cron entry point — the scheduler has to keep dispatching real orders
-   * while the front door is shut.
+   * machine entry points — the scheduler has to keep dispatching real orders
+   * while the front door is shut, and uptime monitors have to keep seeing a
+   * real health answer, not a holding page.
    */
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|products/|marketing/|api/cron).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|products/|marketing/|api/cron|api/health).*)",
+  ],
 };

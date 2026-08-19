@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth";
 import { emailPasswordReset } from "@/lib/email";
 import { env } from "@/lib/env";
+import { allowAttempt } from "@/lib/rate-limit";
 
 export type AuthState = { error?: string; done?: boolean };
 
@@ -23,6 +24,9 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
   if (!name) return { error: "We need something to call you." };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "That email doesn't look right." };
   if (password.length < 8) return { error: "Password needs at least 8 characters." };
+  if (!(await allowAttempt(`signup:${email.toLowerCase()}`, 5, 60 * 60))) {
+    return { error: "Too many attempts with this email. Give it an hour." };
+  }
   if (await findUserByEmail(email)) return { error: "That email already has an account. Try logging in." };
 
   const user = await createUser(email, password, name);
@@ -33,6 +37,14 @@ export async function signupAction(_prev: AuthState, formData: FormData): Promis
 export async function loginAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+
+  // Keyed to the account under attack, not the caller: a credential grind
+  // against one email locks that email, wherever the guesses come from.
+  if (!(await allowAttempt(`login:${email.toLowerCase()}`, 10, 15 * 60))) {
+    return {
+      error: "Too many attempts for this account. Wait fifteen minutes, or reset your password.",
+    };
+  }
 
   const user = await findUserByEmail(email);
   if (!user || !verifyPassword(password, user.password_hash)) {
@@ -58,7 +70,12 @@ export async function requestResetAction(_prev: AuthState, formData: FormData): 
     return { error: "That email doesn't look right." };
   }
 
-  const user = await findUserByEmail(email);
+  // Over the allowance we still answer "sent" — the limiter must not become
+  // an account-existence oracle — we just quietly stop mailing, which is the
+  // mail-bombing protection.
+  const withinAllowance = await allowAttempt(`forgot:${email.toLowerCase()}`, 3, 15 * 60);
+
+  const user = withinAllowance ? await findUserByEmail(email) : null;
   if (user) {
     const token = await createResetToken(user.id);
     await emailPasswordReset({

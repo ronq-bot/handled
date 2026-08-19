@@ -3,7 +3,13 @@ import { requireUser } from "@/lib/auth";
 import { SectionHeading } from "@/components/ui";
 import { integrationStatus } from "@/lib/env";
 import { paymentsAreLive } from "@/lib/payments";
-import { removeCardAction, seedDemoAction, updateSettingsAction } from "../../actions";
+import { ConfirmSubmit } from "@/components/confirm-submit";
+import {
+  deleteAccountAction,
+  removeCardAction,
+  seedDemoAction,
+  updateSettingsAction,
+} from "../../actions";
 
 export const metadata = { title: "Account — Handled" };
 export const dynamic = "force-dynamic";
@@ -21,9 +27,9 @@ const CARD_MESSAGES: Record<string, { tone: "good" | "bad"; text: string }> = {
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ card?: string; detail?: string }>;
+  searchParams: Promise<{ card?: string; detail?: string; account?: string }>;
 }) {
-  const { card, detail } = await searchParams;
+  const { card, detail, account } = await searchParams;
   const user = await requireUser();
   const integrations = integrationStatus();
   const stripeLive = paymentsAreLive();
@@ -193,6 +199,35 @@ export default async function SettingsPage({
               </span>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ── Leaving ──────────────────────────────────────────── */}
+      <section>
+        <h2 className="smallcaps">Leaving</h2>
+        <div className="card mt-5 border-claret/30 p-8">
+          {account === "inflight" && (
+            <p
+              role="status"
+              className="mb-5 rounded-lg border border-brass/40 bg-brass-tint px-3 py-2 text-sm text-brass-deep"
+            >
+              An order is already placed and moving — it will arrive whether or not the account
+              exists. Once it lands, deletion works.
+            </p>
+          )}
+          <p className="serif text-[1.35rem] text-ink">Delete this account.</p>
+          <p className="mt-3 max-w-xl text-muted">
+            Everything goes: the people, the addresses, the dates, the history. There is no
+            archive and no undo. Gifts already placed still arrive — they were paid for.
+          </p>
+          <form action={deleteAccountAction} className="mt-7">
+            <ConfirmSubmit
+              message="Delete the account and everything in it? There is no undo."
+              className="btn btn-ghost text-claret"
+            >
+              Delete my account
+            </ConfirmSubmit>
+          </form>
         </div>
       </section>
 
