@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { listAddresses, listRecipients } from "@/lib/queries";
-import { ADDRESS_KIND_LABELS } from "@/lib/catalog";
-import { formatTime } from "@/lib/date";
-import { SectionHeading } from "@/components/ui";
+import { listAddresses, listMissions, listRecipients } from "@/lib/queries";
+import { ADDRESS_KIND_LABELS, formatMoney, getProduct } from "@/lib/catalog";
+import { formatShort, formatTime } from "@/lib/date";
+import { SectionHeading, StatusPill } from "@/components/ui";
 import {
   createAddressAction,
   createRecipientAction,
@@ -23,12 +23,15 @@ export default async function PeoplePage({
 }) {
   const { needAddress } = await searchParams;
   const user = await requireUser();
-  const [recipients, allAddresses] = await Promise.all([
+  const [recipients, allAddresses, allMissions] = await Promise.all([
     listRecipients(user.id),
     listAddresses(user.id),
+    listMissions(user.id),
   ]);
   const addressesFor = (recipientId: string) =>
     allAddresses.filter((a) => a.recipient_id === recipientId);
+  const missionsFor = (recipientId: string) =>
+    allMissions.filter((m) => m.recipient_id === recipientId && m.status !== "canceled");
 
   return (
     <div className="space-y-8">
@@ -46,6 +49,11 @@ export default async function PeoplePage({
 
       {recipients.map((r) => {
         const addresses = addressesFor(r.id);
+        const history = missionsFor(r.id);
+        const misses = history
+          .filter((m) => m.feedback === "miss")
+          .map((m) => getProduct(m.product_id)?.name)
+          .filter(Boolean);
         return (
           <section key={r.id} className="card p-7">
             <details open={addresses.length === 0}>
@@ -257,6 +265,58 @@ export default async function PeoplePage({
                 </form>
               </details>
             </div>
+
+            {history.length > 0 && (
+              <div className="mt-6 border-t border-line pt-5">
+                <h3 className="smallcaps">Gift history</h3>
+                {misses.length > 0 && (
+                  <p className="mt-2 text-sm text-muted">
+                    Never again, on your say-so:{" "}
+                    <span className="text-claret">{misses.join(", ")}</span>.
+                  </p>
+                )}
+                <ul className="mt-3 space-y-2">
+                  {history.slice(0, 6).map((m) => {
+                    const product = getProduct(m.product_id);
+                    return (
+                      <li key={m.id}>
+                        <Link
+                          href={`/dashboard/gifts/${m.id}`}
+                          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-1.5 text-sm hover:bg-bone-2"
+                        >
+                          <span className="font-mono text-xs text-faint">
+                            {formatShort(m.deliver_on)}
+                          </span>
+                          <span className="min-w-0 flex-1 font-medium">
+                            {product?.name ?? "Gift"}
+                            {m.feedback === "hit" && (
+                              <span className="ml-2 text-xs font-normal text-sage-deep">
+                                she loved it
+                              </span>
+                            )}
+                            {m.feedback === "miss" && (
+                              <span className="ml-2 text-xs font-normal text-claret">
+                                not quite
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-xs text-muted">{formatMoney(m.price_cents)}</span>
+                          <StatusPill status={m.status} />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {history.length > 6 && (
+                  <Link
+                    href="/dashboard/gifts"
+                    className="mt-2 inline-block py-1 text-sm text-muted hover:text-ink"
+                  >
+                    All {history.length} gifts →
+                  </Link>
+                )}
+              </div>
+            )}
 
             <form action={deleteRecipientAction} className="mt-6 border-t border-line pt-5">
               <input type="hidden" name="id" value={r.id} />

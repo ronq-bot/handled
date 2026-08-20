@@ -14,9 +14,14 @@ type Lookup = { recipients: Map<string, Recipient>; addresses: Map<string, Addre
 export const metadata = { title: "Scheduled gifts — Handled" };
 export const dynamic = "force-dynamic";
 
-export default async function GiftsPage() {
+export default async function GiftsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ who?: string; q?: string }>;
+}) {
+  const { who, q } = await searchParams;
   const user = await requireUser();
-  const [missions, recipients, addresses] = await Promise.all([
+  const [allMissions, recipients, addresses] = await Promise.all([
     listMissions(user.id),
     listRecipients(user.id),
     listAddresses(user.id),
@@ -26,9 +31,32 @@ export default async function GiftsPage() {
     addresses: new Map(addresses.map((a) => [a.id, a])),
   };
 
+  // Filters narrow, never 404: an unknown ?who just shows everything.
+  const query = (q ?? "").trim().toLowerCase();
+  const missions = allMissions.filter((m) => {
+    if (who && m.recipient_id !== who) return false;
+    if (query) {
+      const name = getProduct(m.product_id)?.name ?? "";
+      if (!name.toLowerCase().includes(query)) return false;
+    }
+    return true;
+  });
+
   const active = missions.filter((m) => ["scheduled", "placed", "shipped"].includes(m.status));
   const attention = missions.filter((m) => m.status === "failed");
   const done = missions.filter((m) => ["delivered", "canceled"].includes(m.status));
+
+  const chip = (href: string, label: string, current: boolean) => (
+    <Link
+      key={href}
+      href={href}
+      className={`tag transition-colors ${
+        current ? "border-forest bg-forest text-white" : "text-muted hover:border-forest hover:text-ink"
+      }`}
+    >
+      {label}
+    </Link>
+  );
 
   return (
     <div className="space-y-8">
@@ -46,15 +74,53 @@ export default async function GiftsPage() {
         }
       />
 
+      {(recipients.length > 1 || allMissions.length > 5 || query !== "" || who) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {recipients.length > 1 && (
+            <>
+              {chip(query ? `/dashboard/gifts?q=${encodeURIComponent(q ?? "")}` : "/dashboard/gifts", "Everyone", !who)}
+              {recipients.map((r) =>
+                chip(
+                  `/dashboard/gifts?who=${r.id}${query ? `&q=${encodeURIComponent(q ?? "")}` : ""}`,
+                  r.name,
+                  who === r.id,
+                ),
+              )}
+            </>
+          )}
+          <form action="/dashboard/gifts" method="get" className="ml-auto flex items-center gap-2">
+            {who && <input type="hidden" name="who" value={who} />}
+            <input
+              type="search"
+              name="q"
+              defaultValue={q ?? ""}
+              placeholder="Search gifts…"
+              className="field min-h-9 w-44 px-3 py-1.5 text-sm"
+              aria-label="Search gifts by name"
+            />
+          </form>
+        </div>
+      )}
+
       {missions.length === 0 ? (
         <EmptyState
           emoji="📦"
-          title="Nothing scheduled."
-          body="Add a date and put a gift behind it. That's the whole product."
+          title={allMissions.length === 0 ? "Nothing scheduled." : "Nothing matches."}
+          body={
+            allMissions.length === 0
+              ? "Add a date and put a gift behind it. That's the whole product."
+              : "No gifts match that filter. Clear it and they all come back."
+          }
           action={
-            <Link href="/dashboard/dates/new" className="btn btn-primary">
-              Add a date
-            </Link>
+            allMissions.length === 0 ? (
+              <Link href="/dashboard/dates/new" className="btn btn-primary">
+                Add a date
+              </Link>
+            ) : (
+              <Link href="/dashboard/gifts" className="btn btn-quiet">
+                Clear the filter
+              </Link>
+            )
           }
         />
       ) : (
