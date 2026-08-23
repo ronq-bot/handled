@@ -92,6 +92,58 @@ export async function recentProductIds(userId: string, recipientId: string): Pro
   return rows.map((r) => r.product_id).filter(Boolean);
 }
 
+export type DeskRow = Mission & { member_email: string; recipient_name: string };
+
+/**
+ * The operator's order desk: recent missions across EVERY account, joined to
+ * who they belong to. Operator-facing only — the caller must gate this behind
+ * isOperator(); a member must never see another member's orders.
+ */
+export async function orderDesk(limit = 50): Promise<DeskRow[]> {
+  const db = await getDb();
+  return db.all<DeskRow>(
+    `SELECT m.*, u.email AS member_email, r.name AS recipient_name
+     FROM missions m
+     JOIN users u ON u.id = m.user_id
+     LEFT JOIN recipients r ON r.id = m.recipient_id
+     ORDER BY m.updated_at DESC LIMIT ?`,
+    [limit],
+  );
+}
+
+/**
+ * Everything the account owns, for the member to take with them. Secrets
+ * never leave: the password hash, reset tokens, and Stripe identifiers are
+ * stripped before this crosses the wire.
+ */
+export async function exportAccount(userId: string): Promise<Record<string, unknown>> {
+  const db = await getDb();
+  const user = await db.get<Record<string, unknown>>(`SELECT * FROM users WHERE id = ?`, [userId]);
+  if (!user) return {};
+  for (const secret of [
+    "password_hash",
+    "reset_token_hash",
+    "reset_token_expires",
+    "stripe_customer_id",
+    "stripe_payment_method_id",
+  ]) {
+    delete user[secret];
+  }
+
+  const [recipients, addresses, occasions, missions] = await Promise.all([
+    db.all(`SELECT * FROM recipients WHERE user_id = ?`, [userId]),
+    db.all(`SELECT * FROM addresses WHERE user_id = ?`, [userId]),
+    db.all(`SELECT * FROM occasions WHERE user_id = ?`, [userId]),
+    db.all(`SELECT * FROM missions WHERE user_id = ?`, [userId]),
+  ]);
+  const events = await db.all(
+    `SELECT * FROM mission_events WHERE mission_id IN (SELECT id FROM missions WHERE user_id = ?)`,
+    [userId],
+  );
+
+  return { exported_at: new Date().toISOString(), user, recipients, addresses, occasions, missions, mission_events: events };
+}
+
 /**
  * Deletes the account and everything under it — refused while an order is
  * actually moving, because a paid, placed gift will arrive whether or not

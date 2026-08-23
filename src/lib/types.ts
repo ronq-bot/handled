@@ -33,6 +33,8 @@ export type User = {
   /** SHA-256 of the emailed password-reset token, or "" when none is live. */
   reset_token_hash: string;
   reset_token_expires: string;
+  /** The budget Cover Everything and the planner start from. */
+  default_budget_cents: number;
   created_at: string;
 };
 
