@@ -1,8 +1,10 @@
 import { requireUser } from "@/lib/auth";
 import { SectionHeading } from "@/components/ui";
-import { CATEGORY_LABELS, formatMoney, getVendor } from "@/lib/catalog";
+import { CATEGORY_LABELS, formatMoney, getProduct, getVendor } from "@/lib/catalog";
 import { isOperator } from "@/lib/env";
-import { houseLedger } from "@/lib/queries";
+import { houseLedger, orderDesk } from "@/lib/queries";
+import { formatShort } from "@/lib/date";
+import { StatusPill } from "@/components/ui";
 import {
   coverageSummary,
   coverageWithStatus,
@@ -29,7 +31,9 @@ export default async function CoveragePage() {
   const summary = coverageSummary();
   // The commission ledger is the house's own number and must never reach a
   // member's screen — it renders only for the operator.
-  const ledger = isOperator(user.email) ? await houseLedger() : null;
+  const operator = isOperator(user.email);
+  const ledger = operator ? await houseLedger() : null;
+  const desk = operator ? await orderDesk(50) : null;
 
   return (
     <div className="space-y-16">
@@ -196,6 +200,63 @@ export default async function CoveragePage() {
                 addresses allowed to see this. Unset, it shows to nobody there.
               </p>
             </>
+          )}
+        </section>
+      )}
+
+      {/* ── The order desk (operator only) ───────────────────── */}
+      {desk && (
+        <section className="card border-brass/40 p-9">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 className="display-3 text-ink">The order desk</h2>
+            <span className="tag border-brass/60 text-brass-deep">Operator view</span>
+          </div>
+          <p className="mt-3 max-w-2xl text-muted">
+            The last {desk.length} orders across every account, newest movement first. Members
+            never see this section.
+          </p>
+
+          {desk.length === 0 ? (
+            <p className="mt-6 text-muted">Nothing yet — it fills as members schedule gifts.</p>
+          ) : (
+            <div className="mt-7 overflow-x-auto">
+              <table className="w-full min-w-[46rem] text-left text-[0.875rem]">
+                <thead>
+                  <tr className="smallcaps-quiet border-b border-line">
+                    <th className="py-2 pr-4 font-medium">Member</th>
+                    <th className="py-2 pr-4 font-medium">Gift</th>
+                    <th className="py-2 pr-4 font-medium">For</th>
+                    <th className="py-2 pr-4 font-medium">Arrives</th>
+                    <th className="py-2 pr-4 font-medium">Price</th>
+                    <th className="py-2 pr-4 font-medium">Commission</th>
+                    <th className="py-2 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {desk.map((m) => (
+                    <tr key={m.id} className="border-b border-line">
+                      <td className="max-w-[12rem] truncate py-2.5 pr-4 text-muted">
+                        {m.member_email}
+                      </td>
+                      <td className="py-2.5 pr-4 font-semibold">
+                        {getProduct(m.product_id)?.name ?? m.product_id}
+                      </td>
+                      <td className="py-2.5 pr-4 text-muted">{m.recipient_name ?? "—"}</td>
+                      <td className="py-2.5 pr-4 font-mono text-muted">
+                        {formatShort(m.deliver_on)}
+                      </td>
+                      <td className="py-2.5 pr-4 text-muted">{formatMoney(m.price_cents)}</td>
+                      <td className="py-2.5 pr-4 font-mono text-forest">
+                        {m.affiliate_cents ? formatMoney(m.affiliate_cents) : "—"}
+                      </td>
+                      <td className="py-2.5">
+                        <StatusPill status={m.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       )}

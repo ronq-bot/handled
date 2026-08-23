@@ -45,7 +45,7 @@ export default async function PlanPage({
   if (addresses.length === 0) redirect(`/dashboard/people?needAddress=${recipient.id}`);
 
   const address = addresses.find((a) => a.id === query.address) ?? addresses[0];
-  const budget = clampBudget(Number(query.budget) || 120);
+  const budget = clampBudget(Number(query.budget) || user.default_budget_cents / 100 || 120);
   const mode = query.mode === "manual" ? "manual" : "auto";
   const search = (query.q ?? "").trim();
 

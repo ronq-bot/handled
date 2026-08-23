@@ -400,7 +400,7 @@ export async function coverEverythingAction(): Promise<void> {
     const address = addressId ? await getAddress(user.id, addressId) : null;
     if (!address) continue;
 
-    const budgetCents = 12000;
+    const budgetCents = user.default_budget_cents || 12000;
     const pick = autoPick({
       recipient,
       address,
@@ -604,10 +604,16 @@ export async function updateSettingsAction(formData: FormData): Promise<void> {
     : formData.get("payment_ok")
       ? 1
       : 0;
-  await db.run(`UPDATE users SET name = ?, auto_pilot = ?, payment_ok = ? WHERE id = ?`, [s(formData, "name") || user.name,
-    formData.get("auto_pilot") ? 1 : 0,
-    paymentOk,
-    user.id,]);
+  // Only the budgets the planner itself offers — a hand-made request can't
+  // store a $1 default and quietly make every future gift a candy bar.
+  const BUDGETS = [5000, 8000, 12000, 20000, 35000];
+  const rawBudget = Number(s(formData, "default_budget"));
+  const defaultBudget = BUDGETS.includes(rawBudget) ? rawBudget : user.default_budget_cents;
+
+  await db.run(
+    `UPDATE users SET name = ?, auto_pilot = ?, payment_ok = ?, default_budget_cents = ? WHERE id = ?`,
+    [s(formData, "name") || user.name, formData.get("auto_pilot") ? 1 : 0, paymentOk, defaultBudget, user.id],
+  );
   refreshApp();
 }
 

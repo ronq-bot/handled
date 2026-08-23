@@ -142,6 +142,27 @@ export default async function SettingsPage({
             <p className="text-muted">{user.email}</p>
           </div>
 
+          <div>
+            <label className="label" htmlFor="default_budget">
+              Default gift budget
+            </label>
+            <select
+              id="default_budget"
+              name="default_budget"
+              className="field"
+              defaultValue={String(user.default_budget_cents)}
+            >
+              <option value="5000">$50</option>
+              <option value="8000">$80</option>
+              <option value="12000">$120</option>
+              <option value="20000">$200</option>
+              <option value="35000">$350</option>
+            </select>
+            <p className="mt-1.5 text-[0.8125rem] text-faint">
+              Where the planner and &ldquo;Cover everything&rdquo; start. Adjustable per gift.
+            </p>
+          </div>
+
           <label className="choice">
             <input type="checkbox" name="auto_pilot" defaultChecked={user.auto_pilot === 1} />
             <span>
@@ -199,6 +220,21 @@ export default async function SettingsPage({
               </span>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ── Your data ────────────────────────────────────────── */}
+      <section>
+        <h2 className="smallcaps">Your data</h2>
+        <div className="card mt-5 p-8">
+          <p className="serif text-[1.35rem] text-ink">Take a copy of everything.</p>
+          <p className="mt-3 max-w-xl text-muted">
+            One JSON file: the people, addresses, dates, orders, and history. Passwords and payment
+            identifiers are never included.
+          </p>
+          <a href="/api/export" className="btn btn-quiet mt-6">
+            Download my data
+          </a>
         </div>
       </section>
 

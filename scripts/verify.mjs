@@ -1363,4 +1363,33 @@ const { deleteAccount } = await import("../src/lib/queries.ts");
   console.log("  ok  deletion waits for in-flight orders, then leaves nothing behind");
 }
 
+console.log("\noperator & export");
+
+const { orderDesk, exportAccount } = await import("../src/lib/queries.ts");
+
+{
+  const id = await seed();
+  const desk = await orderDesk(10);
+  const row = desk.find((r) => r.id === id);
+  assert.ok(row, "a fresh mission must appear on the desk");
+  assert.match(row.member_email, /@example\.com$/, "the desk names the member");
+  assert.equal(row.recipient_name, "Dana", "the desk names the recipient");
+  passed += 1;
+  console.log("  ok  the order desk joins missions to their member and recipient");
+}
+
+{
+  const id = await seed();
+  const m = await db.get(`SELECT user_id FROM missions WHERE id = ?`, [id]);
+  const data = await exportAccount(m.user_id);
+  assert.equal(data.missions.length, 1);
+  assert.equal(data.user.email, `${m.user_id}@example.com`);
+  const dumped = JSON.stringify(data);
+  for (const secret of ["password_hash", "reset_token", "stripe_customer", "stripe_payment"]) {
+    assert.equal(dumped.includes(secret), false, `${secret} must never leave in an export`);
+  }
+  passed += 1;
+  console.log("  ok  the export carries everything the member owns and none of the secrets");
+}
+
 console.log(`\n${passed} checks passed\n`);

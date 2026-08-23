@@ -167,6 +167,9 @@ const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
   // database read can't mint a working reset link. Expiry is an ISO instant.
   ["users", "reset_token_hash", "TEXT NOT NULL DEFAULT ''"],
   ["users", "reset_token_expires", "TEXT NOT NULL DEFAULT ''"],
+  // What "a gift" costs unless he says otherwise — Cover Everything and the
+  // planner's opening position both read it.
+  ["users", "default_budget_cents", "INTEGER NOT NULL DEFAULT 12000"],
 ];
 
 /**
@@ -301,7 +304,7 @@ async function openPostgres(url: string): Promise<Database> {
   // the schema is current and one round trip replaces them all. (Point the
   // sentinel at whatever the latest migration creates.)
   const probe = await pool.query(
-    `SELECT 1 FROM information_schema.tables WHERE table_name = 'rate_limits'`,
+    `SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'default_budget_cents'`,
   );
   if (probe.rows.length === 0) {
     await pool.query(SCHEMA);
