@@ -175,7 +175,7 @@ export class Battle implements Scene {
     this.cutPower = 1 + (m.slice || 0);
     this.feederMul = 1 + (m.feeder || 0) * 0.15;
     const a = this.area - 1;
-    this.hpMul = 1 + a * 0.24 + a * a * 0.007;
+    this.hpMul = (1 + a * 0.24 + a * a * 0.007) * (1 + a * 0.012);
     const squad = save.squad.filter((id) => save.heroLevels[id] > 0).slice(0, MAX_SLOTS);
     if (squad.length === 0) squad.push('riya');
     squad.forEach((id, i) => this.addHero(HEROES.find((h) => h.id === id)!, i));
@@ -358,7 +358,7 @@ export class Battle implements Scene {
       h.pulse = Math.max(0, h.pulse - dt * 3);
       // Auto-feeder trickles ammo in even without slicing.
       h.feedT += dt * this.feederMul;
-      const feedEvery = 1.4;
+      const feedEvery = 2.2;
       while (h.feedT >= feedEvery) {
         h.feedT -= feedEvery;
         h.ammo = Math.min(this.magSize(h), h.ammo + 1);
