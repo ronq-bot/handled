@@ -251,8 +251,10 @@ export class Battle implements Scene {
       }
       return pool[0];
     };
-    const count = 10 + this.area * 2 + this.wave * 4;
-    const dur = 18 + this.wave * 4;
+    // Late areas get more monsters, but spread over a longer wave so the
+    // opening seconds of a run aren't an instant swarm.
+    const count = Math.round(10 + this.area * 1.2 + this.wave * 4);
+    const dur = Math.max(18 + this.wave * 4, count * 0.5);
     this.spawnQueue = [];
     for (let i = 0; i < count; i++) {
       this.spawnQueue.push({ kind: pick(), at: (i / count) * dur + Math.random() * 0.8 });
