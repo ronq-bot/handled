@@ -41,7 +41,7 @@ export const HEROES: HeroDef[] = [
     id: 'luna', name: 'LUNA', title: 'Lightstick Laser', weapon: 'laser',
     hair: '#8f7bff', hairDark: '#5a45d6', outfit: '#eaf1ff', outfitDark: '#a9b8de',
     skin: '#ffe2cf', accent: '#7ee8ff',
-    damage: 16, fireRate: 1.6, magazine: 12, range: 1000, unlockCost: 600,
+    damage: 16, fireRate: 1.6, magazine: 12, range: 1000, unlockCost: 400,
     blurb: 'Her lightstick beam pierces every monster in a line.',
   },
   {
@@ -61,7 +61,7 @@ export const HEROES: HeroDef[] = [
 ];
 
 export type EnemyKind =
-  | 'gremlo' | 'bonkito' | 'sharky' | 'ballerina' | 'crocopter' | 'cactus'
+  | 'gremlo' | 'bonkito' | 'sharky' | 'ballerina' | 'crocopter' | 'cactus' | 'meatball'
   | 'boss_bonk' | 'boss_kraken' | 'boss_gremking';
 
 export interface EnemyDef {
@@ -84,6 +84,7 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   ballerina: { kind: 'ballerina', name: 'Latte Ballerina', hp: 60, speed: 62, size: 34, damage: 6, xp: 3, coins: 3 },
   crocopter: { kind: 'crocopter', name: 'Crocopter', hp: 40, speed: 90, size: 38, damage: 6, xp: 3, coins: 3, flying: true },
   cactus: { kind: 'cactus', name: 'Cactus Elefanto', hp: 220, speed: 32, size: 54, damage: 14, xp: 8, coins: 8 },
+  meatball: { kind: 'meatball', name: 'Meatball', hp: 14, speed: 150, size: 20, damage: 4, xp: 0, coins: 0 },
   boss_bonk: { kind: 'boss_bonk', name: 'MEGA BONKITO', hp: 1600, speed: 22, size: 110, damage: 40, xp: 40, coins: 60, boss: true },
   boss_kraken: { kind: 'boss_kraken', name: 'SPAGHETTI KRAKEN', hp: 2400, speed: 18, size: 120, damage: 50, xp: 50, coins: 80, boss: true },
   boss_gremking: { kind: 'boss_gremking', name: 'KING GREMLO', hp: 2000, speed: 26, size: 110, damage: 45, xp: 45, coins: 70, boss: true },

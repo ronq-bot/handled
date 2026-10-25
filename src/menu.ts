@@ -176,7 +176,6 @@ export class Home implements Scene {
   // --- Battle tab ---
 
   drawBattleTab(ctx: CanvasRenderingContext2D, t: number) {
-    const H = engine.H;
     const y0 = this.top + 90;
     // Logo
     ctx.save();
@@ -188,14 +187,21 @@ export class Home implements Scene {
 
     // Hero line-up with a monster looming behind
     const world = worldForArea(this.selectedArea);
-    const stageY = Math.min(H - 470, y0 + 560);
-    drawEnemy(ctx, world.boss, W / 2, stageY - 220, 150, t, 0, false, 0);
+    // Controls hug the tab bar; the showcase scales into whatever space is left.
+    const sy = this.bottom - 140 - 370;
+    const stageY = sy - 30;
+    const k = Math.max(0.75, Math.min(1.45, (stageY - (y0 + 170)) / 420));
+    // Spotlight glow behind the showcase
+    const glow = ctx.createRadialGradient(W / 2, stageY - 200 * k, 20, W / 2, stageY - 200 * k, 340 * k);
+    glow.addColorStop(0, 'rgba(255,143,208,0.45)');
+    glow.addColorStop(1, 'rgba(255,143,208,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, stageY - 560 * k, W, 600 * k);
+    drawEnemy(ctx, world.boss, W / 2, stageY - 230 * k, 150 * k, t, 0, false, 0);
     const squad = save.squad.map((id) => HEROES.find((h) => h.id === id)!).filter(Boolean);
     const xs = squad.length === 1 ? [360] : squad.length === 2 ? [250, 470] : [150, 360, 570];
-    squad.forEach((h, i) => drawHero(ctx, h, xs[i], stageY, 1.15, t + i, Math.sin(t + i) * 0.2, 0));
+    squad.forEach((h, i) => drawHero(ctx, h, xs[i], stageY - (squad.length === 3 && i === 1 ? 20 : 0), 1.15 * k, t + i, Math.sin(t + i) * 0.2, 0));
 
-    // Area selector
-    const sy = stageY + 40;
     panel(ctx, 60, sy, W - 120, 120, '#7b4fd0', '#4a2596');
     text(ctx, world.name.toUpperCase(), W / 2, sy + 36, 26, '#ffe066');
     text(ctx, `AREA ${this.selectedArea}`, W / 2, sy + 82, 44);

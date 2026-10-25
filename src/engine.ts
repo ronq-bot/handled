@@ -29,6 +29,7 @@ class Engine {
   safeTop = 0;
   safeBottom = 0;
   time = 0;
+  speed = 1; // >1 runs several fixed updates per frame (automated balance tests)
   pointer: Pointer = { x: 0, y: 0, down: false };
   private stack: Scene[] = [];
   private last = 0;
@@ -125,7 +126,10 @@ class Engine {
     const top = this.top();
     // Overlays (popups) sit above the scene below them: update only the top,
     // render the whole stack so the game stays visible underneath.
-    top?.update(dt);
+    for (let i = 0; i < this.speed; i++) {
+      this.time += i ? dt : 0;
+      top?.update(dt);
+    }
     const ctx = this.ctx;
     ctx.setTransform(this.dpr * this.scale, 0, 0, this.dpr * this.scale, 0, 0);
     for (const s of this.stack) s.render(ctx);

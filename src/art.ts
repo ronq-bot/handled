@@ -494,6 +494,7 @@ function paintEnemy(ctx: CanvasRenderingContext2D, kind: EnemyKind, r: number, t
     case 'crocopter': crocopter(ctx, t + phase); break;
     case 'cactus': cactus(ctx, walk); break;
     case 'boss_kraken': kraken(ctx, t + phase); break;
+    case 'meatball': meatball(ctx, t + phase); break;
   }
   ctx.restore();
 }
@@ -809,6 +810,24 @@ function cactus(ctx: CanvasRenderingContext2D, walk: number) {
   circle(ctx, 0, -36, 4);
   ctx.fillStyle = '#ffd23f';
   ctx.fill();
+}
+
+function meatball(ctx: CanvasRenderingContext2D, t: number) {
+  ctx.rotate(Math.sin(t * 10) * 0.2);
+  circle(ctx, 0, 0, 34);
+  fillStroke(ctx, '#9a5230', 5);
+  ctx.fillStyle = '#7a3a1e';
+  for (const [x, y] of [[-14, 14], [16, 10], [6, -20], [-18, -8]]) {
+    circle(ctx, x, y, 5);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.moveTo(-26, -24);
+  ctx.quadraticCurveTo(0, -46, 24, -26);
+  ctx.quadraticCurveTo(10, -16, 0, -22);
+  ctx.quadraticCurveTo(-12, -14, -26, -24);
+  fillStroke(ctx, '#e23b2e', 3);
+  eyes(ctx, -2, 11, 7, true);
 }
 
 function kraken(ctx: CanvasRenderingContext2D, t: number) {

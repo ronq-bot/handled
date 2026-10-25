@@ -13,17 +13,17 @@ unchecked item each iteration.
 - [x] Home: area select, squad roster (unlock / level up / pick team), boosts shop
 - [x] Survival mode (unlocks after area 5), daily gift, settings
 - [x] Synthesized SFX + music, haptics hook
-- [ ] Balance pass across all 30 areas (automated sim)
-- [ ] Polish: home screen layout on tall phones, belt look, more juice
-- [ ] Boss attack patterns (spawn minions / charge)
+- [~] Balance pass across all 30 areas (automated sim) — worlds 1–2 tuned, sim running for world 3
+- [x] Polish: home screen layout on tall phones, belt look, more juice
+- [x] Boss attack patterns (spawn minions / charge)
 - [ ] Monster codex / collection screen
 - [ ] Achievements via Game Center (optional)
 
 ## iOS packaging
-- [ ] Capacitor iOS project (bundle id, portrait lock, status bar hidden)
-- [ ] App icon (1024) + launch screen generated from game art
-- [ ] Haptics plugin wired, audio session handling on interruptions
-- [ ] Pause on background / resume
+- [x] Capacitor iOS project (bundle id, portrait lock, status bar hidden)
+- [x] App icon (1024) + launch screen generated from game art
+- [x] Haptics plugin wired, audio session handling on interruptions
+- [x] Pause on background / resume
 
 ## App Store submission kit
 - [ ] Screenshots (6.9" + 13" iPad) captured from the game

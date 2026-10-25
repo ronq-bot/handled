@@ -56,6 +56,8 @@ interface Enemy {
   dead: boolean;
   wobble: number;
   spawnT: number;
+  abilityT: number;
+  chargeT: number;
 }
 
 interface Shot {
@@ -89,6 +91,7 @@ interface BeltBullet {
   x: number;
   cut: boolean;
   cutT: number;
+  gold: boolean;
 }
 
 interface AmmoToken {
@@ -171,12 +174,12 @@ export class Battle implements Scene {
     this.cutPower = 1 + (m.slice || 0);
     this.feederMul = 1 + (m.feeder || 0) * 0.15;
     const a = this.area - 1;
-    this.hpMul = 1 + a * 0.3 + a * a * 0.018;
+    this.hpMul = 1 + a * 0.22 + a * a * 0.01;
     const squad = save.squad.filter((id) => save.heroLevels[id] > 0).slice(0, MAX_SLOTS);
     if (squad.length === 0) squad.push('riya');
     squad.forEach((id, i) => this.addHero(HEROES.find((h) => h.id === id)!, i));
     this.layout();
-    for (let i = 0; i < 40; i++) this.belt.push({ x: i * 34, cut: false, cutT: 0 });
+    for (let i = 0; i < 40; i++) this.belt.push({ x: i * 34, cut: false, cutT: 0, gold: false });
     this.banner = this.survival ? 'SURVIVAL!' : `AREA ${this.area}`;
     this.bannerT = 2;
   }
@@ -232,17 +235,27 @@ export class Battle implements Scene {
     this.wave++;
     this.waveT = 0;
     this.bossSpawned = false;
-    const pool = this.world.pool.filter((k) => k !== 'cactus' || this.area % 10 >= 3 || this.area > 10);
+    // Weighted mix: tanky and tricky monsters get rarer weights, and the
+    // cactus only shows up from the third area of each world.
+    const inWorld = ((this.area - 1) % 10) + 1;
+    const weights: Partial<Record<EnemyKind, number>> = {
+      gremlo: 3, bonkito: 3, sharky: 2, ballerina: 2, crocopter: 1.4, cactus: inWorld >= 3 ? 0.5 + inWorld * 0.05 : 0,
+    };
+    const pool = this.world.pool.filter((k) => (weights[k] || 0) > 0);
+    const total = pool.reduce((a, k) => a + (weights[k] || 0), 0);
+    const pick = (): EnemyKind => {
+      let r = Math.random() * total;
+      for (const k of pool) {
+        r -= weights[k] || 0;
+        if (r <= 0) return k;
+      }
+      return pool[0];
+    };
     const count = 10 + this.area * 2 + this.wave * 4;
     const dur = 18 + this.wave * 4;
     this.spawnQueue = [];
     for (let i = 0; i < count; i++) {
-      // Early waves lean on the weakest monster; tougher ones mix in later.
-      const r = Math.random();
-      let kind: EnemyKind;
-      if (r < 0.4 - this.wave * 0.05) kind = pool[0];
-      else kind = pool[1 + Math.floor(Math.random() * (pool.length - 1))];
-      this.spawnQueue.push({ kind, at: (i / count) * dur + Math.random() * 0.8 });
+      this.spawnQueue.push({ kind: pick(), at: (i / count) * dur + Math.random() * 0.8 });
     }
     // Small clusters of gremlos
     if (this.wave >= 2) {
@@ -256,15 +269,15 @@ export class Battle implements Scene {
     this.bannerT = 1.6;
   }
 
-  spawn(kind: EnemyKind, x?: number) {
+  spawn(kind: EnemyKind, x?: number, y?: number) {
     const def = ENEMIES[kind];
     const hpMul = this.survival ? 1 + this.time / 40 + Math.pow(this.time / 120, 2) : this.hpMul;
     const hp = def.hp * hpMul * (def.boss ? 1 : 1);
     this.enemies.push({
-      def, x: x ?? 90 + Math.random() * (W - 180), y: this.fieldTop - 20,
+      def, x: Math.max(60, Math.min(W - 60, x ?? 90 + Math.random() * (W - 180))), y: y ?? this.fieldTop - 20,
       hp, maxHp: hp, speed: def.speed * (0.9 + Math.random() * 0.2) * (this.survival ? 1 + Math.min(0.6, this.time / 300) : 1 + Math.min(0.3, this.area * 0.01)),
       flash: 0, slowT: 0, freezeT: 0, phase: Math.random() * 10, attackT: 0, atWall: false, dead: false,
-      wobble: Math.random() * Math.PI * 2, spawnT: 0,
+      wobble: Math.random() * Math.PI * 2, spawnT: 0, abilityT: 4, chargeT: 0,
     });
     if (def.boss) {
       this.enemies[this.enemies.length - 1].x = W / 2;
@@ -561,8 +574,9 @@ export class Battle implements Scene {
       const stopY = this.wallY - 12;
       if (bottom < stopY) {
         e.atWall = false;
+        if (e.def.boss) this.bossAbility(e, dt);
         if (e.freezeT <= 0) {
-          const sp = e.speed * (e.slowT > 0 ? 0.5 : 1);
+          const sp = e.speed * (e.slowT > 0 ? 0.5 : 1) * (e.chargeT > 0 ? 4 : 1);
           e.y += sp * dt * (0.6 + 0.4 * scale);
           e.wobble += dt * 3;
           if (e.def.kind === 'ballerina') e.x += Math.sin(e.wobble) * 60 * dt;
@@ -596,6 +610,40 @@ export class Battle implements Scene {
     this.enemies = this.enemies.filter((e) => !e.dead);
   }
 
+  // Each boss has a signature move on a timer.
+  bossAbility(e: Enemy, dt: number) {
+    e.chargeT = Math.max(0, e.chargeT - dt);
+    e.abilityT -= dt;
+    if (e.abilityT > 0) return;
+    const r = e.def.size * this.persp(e.y);
+    switch (e.def.kind) {
+      case 'boss_bonk':
+        // BONK RUSH: a short charge toward the barrier.
+        e.abilityT = 7;
+        e.chargeT = 0.9;
+        this.shake = 10;
+        sfx.bossRoar();
+        this.floatText(e.x, e.y - r - 40, 'BONK RUSH!', '#ff3b5c');
+        break;
+      case 'boss_gremking':
+        // Summons a ring of gremlos.
+        e.abilityT = 5.5;
+        for (let i = 0; i < 4; i++) this.spawn('gremlo', e.x + (i - 1.5) * 70, e.y + 20);
+        this.floatText(e.x, e.y - r - 40, 'MINIONS!', '#b98cff');
+        break;
+      case 'boss_kraken':
+        // Flings meatballs that race for the barrier.
+        e.abilityT = 4.5;
+        for (let i = 0; i < 3; i++) this.spawn('meatball', e.x + (i - 1) * 90, e.y + r * 0.6);
+        this.floatText(e.x, e.y - r - 40, 'MEATBALLS!', '#ff7a2f');
+        break;
+    }
+  }
+
+  floatText(x: number, y: number, s: string, color: string) {
+    this.particles.push({ x, y, vx: 0, vy: -60, life: 1.2, max: 1.2, size: 36, color, kind: 'text', text: s });
+  }
+
   // --- Ammo belt: the satisfying slicing bit ---
 
   updateBelt(dt: number) {
@@ -611,6 +659,7 @@ export class Battle implements Scene {
         b.x -= 40 * 34;
         b.cut = false;
         b.cutT = 0;
+        b.gold = Math.random() < 0.04;
       }
     }
   }
@@ -628,7 +677,14 @@ export class Battle implements Scene {
         haptic('LIGHT');
         // Send ammo to whoever is emptiest.
         const hero = [...this.heroes].sort((a, c) => a.ammo / this.magSize(a) - c.ammo / this.magSize(c))[0];
-        if (hero) {
+        if (b.gold) {
+          // Golden bullet: a full burst of ammo for the whole squad.
+          for (const h of this.heroes) {
+            this.ammoTokens.push({ x: b.x, y: by, tx: h.x, ty: h.y - 40, t: 0, hero: h, amount: 6 * this.cutPower });
+          }
+          sfx.coin();
+          this.particles.push({ x: b.x, y: by - 50, vx: 0, vy: -80, life: 0.9, max: 0.9, size: 30, color: '#ffe066', kind: 'text', text: 'GOLDEN!' });
+        } else if (hero) {
           this.ammoTokens.push({ x: b.x, y: by, tx: hero.x, ty: hero.y - 40, t: 0, hero, amount: 2 * this.cutPower });
         }
         for (let i = 0; i < 6; i++) {
@@ -1130,18 +1186,22 @@ export class Battle implements Scene {
     for (const b of this.belt) {
       if (b.x < -30 || b.x > W + 30) continue;
       if (!b.cut) {
-        bulletShape(ctx, b.x, y, 1, Math.PI / 2);
+        bulletShape(ctx, b.x, y + 4, 1.1, 0, b.gold);
+        if (b.gold) {
+          ctx.globalAlpha = 0.5 + Math.sin(t * 12 + b.x) * 0.5;
+          star(ctx, b.x + 10, y - 22, 7, '#ffffff', 0);
+          ctx.globalAlpha = 1;
+        }
       } else if (b.cutT < 0.4) {
         // Two halves flying apart
         const k = b.cutT / 0.4;
         ctx.save();
         ctx.globalAlpha = 1 - k;
-        bulletHalf(ctx, b.x - k * 30, y - k * 40, -k * 2, true);
-        bulletHalf(ctx, b.x + k * 30, y + k * 10, k * 2, false);
+        bulletHalf(ctx, b.x - k * 20, y - k * 70, -k * 3, true);
+        bulletHalf(ctx, b.x, y + 4, 0, false);
         ctx.restore();
       }
     }
-    void t;
   }
 
   drawParticles(ctx: CanvasRenderingContext2D) {
@@ -1403,7 +1463,7 @@ export class Battle implements Scene {
 
 // --- Helpers ---
 
-function bulletShape(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, rot = 0) {
+function bulletShape(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, rot = 0, gold = false) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(rot);
@@ -1415,12 +1475,12 @@ function bulletShape(ctx: CanvasRenderingContext2D, x: number, y: number, s: num
   ctx.quadraticCurveTo(9, -22, 9, -4);
   ctx.lineTo(9, 18);
   ctx.closePath();
-  ctx.fillStyle = '#ffcf3f';
+  ctx.fillStyle = gold ? '#fff2a8' : '#ffcf3f';
   ctx.fill();
   ctx.lineWidth = 3.5;
   ctx.strokeStyle = INK;
   ctx.stroke();
-  ctx.fillStyle = '#e09a00';
+  ctx.fillStyle = gold ? '#ffb020' : '#c98a2a';
   ctx.fillRect(-9, 4, 18, 5);
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
   ctx.fillRect(-5, -14, 3, 24);
@@ -1430,7 +1490,7 @@ function bulletShape(ctx: CanvasRenderingContext2D, x: number, y: number, s: num
 function bulletHalf(ctx: CanvasRenderingContext2D, x: number, y: number, rot: number, top: boolean) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(Math.PI / 2 + rot);
+  ctx.rotate(rot);
   ctx.beginPath();
   if (top) {
     ctx.moveTo(-9, 0);
