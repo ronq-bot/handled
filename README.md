@@ -16,4 +16,17 @@ npm run dev      # http://localhost:5173 — use your browser's phone emulation
 npm run build    # production bundle in dist/
 ```
 
-See `ROADMAP.md` for progress toward App Store submission.
+## iOS
+
+```bash
+npm run ios:sync   # build + copy into the Xcode project (run on a Mac)
+npm run ios:open   # open in Xcode
+```
+
+App Store listing, privacy/support pages, screenshots and the full
+step-by-step publishing guide are in `store/` — start with
+`store/SUBMISSION_GUIDE.md`. Regenerate art/screenshots with
+`npm run assets` and `node scripts/make-screenshots.cjs` while
+`npm run dev` is running.
+
+See `ROADMAP.md` for status.

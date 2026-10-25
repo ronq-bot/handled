@@ -1,6 +1,9 @@
 // Persistent progress. Stored locally on the device — the game has no
-// accounts and sends nothing anywhere.
+// accounts and sends nothing anywhere. In the iOS app the save is mirrored
+// to native storage, which iOS never purges the way it can WebView storage.
 
+import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 import { HEROES, META } from './data';
 
 export interface SaveData {
@@ -18,6 +21,7 @@ export interface SaveData {
   haptics: boolean;
   tutorialDone: boolean;
   lastDaily: string; // yyyy-mm-dd of last daily reward claim
+  savedAt: number; // ms timestamp of the last write, to pick the newest copy
 }
 
 const KEY = 'idolsquad.save.v1';
@@ -42,13 +46,13 @@ function fresh(): SaveData {
     haptics: true,
     tutorialDone: false,
     lastDaily: '',
+    savedAt: 0,
   };
 }
 
-function load(): SaveData {
+function parse(raw: string | null): SaveData {
   const base = fresh();
   try {
-    const raw = localStorage.getItem(KEY);
     if (!raw) return base;
     const data = JSON.parse(raw) as Partial<SaveData>;
     return {
@@ -63,14 +67,39 @@ function load(): SaveData {
   }
 }
 
-export const save: SaveData = load();
+function readLocal() {
+  try {
+    return localStorage.getItem(KEY);
+  } catch {
+    return null;
+  }
+}
+
+export const save: SaveData = parse(readLocal());
+
+const native = Capacitor.isNativePlatform();
+
+// Called once at startup in the app: adopt the native copy if it is newer.
+export async function restoreNativeBackup() {
+  if (!native) return;
+  try {
+    const { value } = await Preferences.get({ key: KEY });
+    const backup = parse(value);
+    if (value && backup.savedAt > save.savedAt) Object.assign(save, backup);
+  } catch {
+    // Keep whatever local storage had.
+  }
+}
 
 export function persist() {
+  save.savedAt = Date.now();
+  const json = JSON.stringify(save);
   try {
-    localStorage.setItem(KEY, JSON.stringify(save));
+    localStorage.setItem(KEY, json);
   } catch {
     // Storage full or unavailable — progress for this session still works.
   }
+  if (native) Preferences.set({ key: KEY, value: json }).catch(() => {});
 }
 
 export function resetSave() {

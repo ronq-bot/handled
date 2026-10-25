@@ -13,11 +13,13 @@ unchecked item each iteration.
 - [x] Home: area select, squad roster (unlock / level up / pick team), boosts shop
 - [x] Survival mode (unlocks after area 5), daily gift, settings
 - [x] Synthesized SFX + music, haptics hook
-- [~] Balance pass across all 30 areas (automated sim) — worlds 1–2 tuned, sim running for world 3
+- [x] Balance pass across all 30 areas (automated sim, fast + casual player bots)
 - [x] Polish: home screen layout on tall phones, belt look, more juice
 - [x] Boss attack patterns (spawn minions / charge)
-- [ ] Monster codex / collection screen
-- [ ] Achievements via Game Center (optional)
+- [x] Star ratings per area (replay value)
+- [x] Save mirrored to native storage so iOS can't purge progress
+- [ ] (post-launch) Monster codex / collection screen
+- [ ] (post-launch) Achievements via Game Center
 
 ## iOS packaging
 - [x] Capacitor iOS project (bundle id, portrait lock, status bar hidden)
@@ -31,3 +33,8 @@ unchecked item each iteration.
 - [x] Privacy policy page (no data collected) + support page
 - [x] Age rating answers, App Privacy "Data Not Collected"
 - [x] Step-by-step submission guide (Xcode archive → TestFlight → review)
+
+## Needs you (on a Mac)
+- [ ] Apple Developer Program membership
+- [ ] Set your bundle ID in `capacitor.config.ts`, replace `SUPPORT_EMAIL` in `store/*.html`
+- [ ] Follow `store/SUBMISSION_GUIDE.md`: test on device → archive → TestFlight → submit

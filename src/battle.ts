@@ -1303,10 +1303,13 @@ export class Battle implements Scene {
     const k = (t * 0.9) % 1;
     const hx = 120 + k * 480;
     const hy = y + Math.sin(k * Math.PI) * -30;
-    ctx.fillStyle = 'rgba(20,0,40,0.55)';
-    rr(ctx, 60, y - 160, W - 120, 70, 35);
+    // Hint sits over the field, clear of the heroes, pointing down at the belt.
+    const ty = this.wallY - 150;
+    ctx.fillStyle = 'rgba(20,0,40,0.6)';
+    rr(ctx, 60, ty - 40, W - 120, 120, 36);
     ctx.fill();
-    text(ctx, 'SWIPE TO SLICE AMMO!', W / 2, y - 125, 34, '#ffe066');
+    text(ctx, 'SWIPE TO SLICE AMMO!', W / 2, ty, 36, '#ffe066');
+    text(ctx, '▼ on the belt at the bottom ▼', W / 2, ty + 46, 24, '#ffffff');
     // Pointing hand
     ctx.save();
     ctx.translate(hx, hy + 30);
@@ -1442,7 +1445,7 @@ export class Battle implements Scene {
       text(ctx, `Best: ${fmtTime(save.bestSurvival)}`, W / 2, py + 210, 24, '#ffe066');
     } else {
       text(ctx, won ? `Area ${this.area} cleared!` : `Area ${this.area} · Wave ${this.wave}`, W / 2, py + 170, 30);
-      text(ctx, `${this.kills} monsters defeated`, W / 2, py + 210, 24, '#e0d4ff');
+      text(ctx, `${this.kills} monster${this.kills === 1 ? '' : 's'} defeated`, W / 2, py + 210, 24, '#e0d4ff');
     }
     rr(ctx, 170, py + 250, 380, 90, 45);
     ctx.fillStyle = 'rgba(20,0,40,0.4)';

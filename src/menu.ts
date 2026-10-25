@@ -374,7 +374,7 @@ export class Home implements Scene {
       panel(ctx, 30, y, W - 60, rowH - 14, '#7b4fd0', '#4a2596', 22);
       text(ctx, m.name, 60, y + rowH * 0.3, 30, '#fff', 'left');
       text(ctx, `Lv ${lvl}`, 60 + measure(ctx, m.name, 30) + 20, y + rowH * 0.3, 22, '#ffe066', 'left');
-      text(ctx, lvl ? m.text(lvl) : m.text(1).replace(/\d+/, '0'), 60, y + rowH * 0.62, 22, '#e0d4ff', 'left');
+      text(ctx, lvl ? m.text(lvl) : `Next: ${m.text(1)}`, 60, y + rowH * 0.62, 22, '#e0d4ff', 'left');
       const cost = metaCost(m, lvl);
       const b: Button = {
         x: W - 260, y: y + 14, w: 210, h: rowH - 42, label: max ? 'MAX' : `${cost}`, color: 'green', disabled: max,
