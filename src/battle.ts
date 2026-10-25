@@ -162,6 +162,7 @@ export class Battle implements Scene {
   opts: BattleOptions;
   hpMul = 1;
   nextBossAt = 90;
+  stars = 0;
 
   constructor(opts: BattleOptions) {
     this.opts = opts;
@@ -844,6 +845,12 @@ export class Battle implements Scene {
     this.coins = Math.round(coins * bonus);
     save.coins += this.coins;
     if (won && !this.survival && this.area >= save.highestArea) save.highestArea = this.area + 1;
+    if (won && !this.survival) {
+      // Stars reward keeping the barrier healthy.
+      const f = this.barrier / this.barrierMax;
+      this.stars = f >= 0.9 ? 3 : f >= 0.5 ? 2 : 1;
+      save.stars[this.area] = Math.max(save.stars[this.area] || 0, this.stars);
+    }
     if (this.survival) save.bestSurvival = Math.max(save.bestSurvival, Math.floor(this.time));
     persist();
     if (won) {
@@ -1423,7 +1430,10 @@ export class Battle implements Scene {
     const py = H / 2 - 330;
     panel(ctx, 70, py, 580, 640, won ? '#7b4fd0' : '#6a4f8a', won ? '#4a2596' : '#3a2a5a');
     if (won) {
-      for (let i = 0; i < 3; i++) star(ctx, W / 2 + (i - 1) * 110, py + 10 - (i === 1 ? 24 : 0) + Math.sin(t * 3 + i) * 4, i === 1 ? 52 : 40, '#ffd23f', 5);
+      for (let i = 0; i < 3; i++) {
+        const lit = i < this.stars && this.modeT > 0.5 + i * 0.25;
+        star(ctx, W / 2 + (i - 1) * 110, py + 10 - (i === 1 ? 24 : 0) + Math.sin(t * 3 + i) * 4, i === 1 ? 52 : 40, lit ? '#ffd23f' : '#5a4a7a', 5);
+      }
     }
     const title = this.survival ? 'TIME UP!' : won ? 'VICTORY!' : 'DEFEATED';
     text(ctx, title, W / 2, py + 100, 64, won ? '#ffe066' : '#ffffff');

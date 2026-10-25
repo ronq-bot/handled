@@ -206,6 +206,8 @@ export class Home implements Scene {
     panel(ctx, 60, sy, W - 120, 120, '#7b4fd0', '#4a2596');
     text(ctx, world.name.toUpperCase(), W / 2, sy + 36, 26, '#ffe066');
     text(ctx, `AREA ${this.selectedArea}`, W / 2, sy + 82, 44);
+    const got = save.stars[this.selectedArea] || 0;
+    for (let i = 0; i < 3; i++) star(ctx, W / 2 + 112 + i * 26, sy + 80, 11, i < got ? '#ffd23f' : '#3a2a6a', 3);
     const prev: Button = {
       x: 76, y: sy + 30, w: 80, h: 76, label: '◀', color: 'blue', disabled: this.selectedArea <= 1,
       onTap: () => { this.selectedArea = Math.max(1, this.selectedArea - 1); },

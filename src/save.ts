@@ -8,6 +8,7 @@ export interface SaveData {
   coins: number;
   gems: number;
   highestArea: number; // highest area unlocked (1-based)
+  stars: Record<number, number>; // best 1-3 star rating per cleared area
   bestSurvival: number; // seconds
   heroLevels: Record<string, number>; // 0 = locked
   squad: string[]; // hero ids chosen for the next run, in slot order
@@ -31,6 +32,7 @@ function fresh(): SaveData {
     coins: 0,
     gems: 0,
     highestArea: 1,
+    stars: {},
     bestSurvival: 0,
     heroLevels,
     squad: ['riya', 'kai'],
@@ -54,6 +56,7 @@ function load(): SaveData {
       ...data,
       heroLevels: { ...base.heroLevels, ...(data.heroLevels || {}) },
       meta: { ...base.meta, ...(data.meta || {}) },
+      stars: { ...(data.stars || {}) },
     };
   } catch {
     return base;
