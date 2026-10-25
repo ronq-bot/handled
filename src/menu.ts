@@ -291,7 +291,7 @@ export class Home implements Scene {
     text(ctx, h.name, tx, py + 50, 48, h.hair, 'left');
     text(ctx, h.title.toUpperCase(), tx, py + 96, 26, '#ffe066', 'left');
     blurb(ctx, h.blurb, tx, py + 140);
-    const dmg = h.damage * (1 + (Math.max(1, lvl) - 1) * 0.18);
+    const dmg = h.damage * (1 + (Math.max(1, lvl) - 1) * 0.22);
     const stats: [string, string][] = [
       ['Level', owned ? `${lvl}` : '—'],
       ['Damage', `${Math.round(dmg)}`],

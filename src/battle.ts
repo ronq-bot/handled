@@ -174,7 +174,7 @@ export class Battle implements Scene {
     this.cutPower = 1 + (m.slice || 0);
     this.feederMul = 1 + (m.feeder || 0) * 0.15;
     const a = this.area - 1;
-    this.hpMul = 1 + a * 0.22 + a * a * 0.01;
+    this.hpMul = 1 + a * 0.24 + a * a * 0.007;
     const squad = save.squad.filter((id) => save.heroLevels[id] > 0).slice(0, MAX_SLOTS);
     if (squad.length === 0) squad.push('riya');
     squad.forEach((id, i) => this.addHero(HEROES.find((h) => h.id === id)!, i));
@@ -226,7 +226,7 @@ export class Battle implements Scene {
   }
 
   heroDamage(h: Hero) {
-    return h.def.damage * (1 + (h.lvl - 1) * 0.18) * (1 + (save.meta.power || 0) * 0.1) * h.dmgMul;
+    return h.def.damage * (1 + (h.lvl - 1) * 0.22) * (1 + (save.meta.power || 0) * 0.1) * h.dmgMul;
   }
 
   // --- Waves ---
@@ -273,9 +273,11 @@ export class Battle implements Scene {
 
   spawn(kind: EnemyKind, x?: number, y?: number) {
     const def = ENEMIES[kind];
-    const hpMul = this.survival ? 1 + this.time / 40 + Math.pow(this.time / 120, 2) : this.hpMul;
+    const hpMul = this.survival ? 1 + this.time / 30 + Math.pow(this.time / 150, 2) : this.hpMul;
     // Bosses scale a little slower than the crowd so they stay beatable.
-    const hp = def.hp * (def.boss ? Math.pow(hpMul, 0.85) : hpMul);
+    // The first wave is a little softer so a fresh run (no cards yet) can find its feet.
+    const grace = !this.survival && this.wave <= 1 ? 0.8 : 1;
+    const hp = def.hp * grace * (def.boss ? Math.pow(hpMul, 0.85) : hpMul);
     this.enemies.push({
       def, x: Math.max(60, Math.min(W - 60, x ?? 90 + Math.random() * (W - 180))), y: y ?? this.fieldTop - 20,
       hp, maxHp: hp, speed: def.speed * (0.9 + Math.random() * 0.2) * (this.survival ? 1 + Math.min(0.6, this.time / 300) : 1 + Math.min(0.3, this.area * 0.01)),
@@ -315,7 +317,7 @@ export class Battle implements Scene {
 
     // Spawning
     if (this.survival) {
-      const rate = 0.9 + this.time / 25;
+      const rate = 0.8 + this.time / 45;
       if (Math.random() < rate * dt) {
         const pool = ['gremlo', 'bonkito', 'sharky', 'ballerina', 'crocopter', ...(this.time > 60 ? ['cactus'] : [])] as EnemyKind[];
         this.spawn(pool[Math.floor(Math.random() * pool.length)]);
@@ -838,7 +840,7 @@ export class Battle implements Scene {
     const bonus = 1 + (save.meta.coins || 0) * 0.1;
     let coins = this.coins;
     if (won) coins += 40 + this.area * 15;
-    if (this.survival) coins += Math.floor(this.time);
+    if (this.survival) coins += Math.floor(this.time / 2);
     this.coins = Math.round(coins * bonus);
     save.coins += this.coins;
     if (won && !this.survival && this.area >= save.highestArea) save.highestArea = this.area + 1;
