@@ -172,9 +172,9 @@ export const META: MetaDef[] = [
 ];
 
 export function metaCost(def: MetaDef, lvl: number) {
-  return Math.round(def.baseCost * Math.pow(1.35, lvl));
+  return Math.round(def.baseCost * Math.pow(1.28, lvl));
 }
 
 export function heroLevelCost(lvl: number) {
-  return Math.round(80 * Math.pow(1.45, lvl - 1));
+  return Math.round(80 * Math.pow(1.35, lvl - 1));
 }

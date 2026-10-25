@@ -190,7 +190,8 @@ export class Home implements Scene {
     // Controls hug the tab bar; the showcase scales into whatever space is left.
     const sy = this.bottom - 140 - 370;
     const stageY = sy - 30;
-    const k = Math.max(0.75, Math.min(1.45, (stageY - (y0 + 170)) / 420));
+    // Boss top sits ~470k above the stage line; keep it clear of the logo.
+    const k = Math.max(0.6, Math.min(1.3, (stageY - (y0 + 180)) / 470));
     // Spotlight glow behind the showcase
     const glow = ctx.createRadialGradient(W / 2, stageY - 200 * k, 20, W / 2, stageY - 200 * k, 340 * k);
     glow.addColorStop(0, 'rgba(255,143,208,0.45)');

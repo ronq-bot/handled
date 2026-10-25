@@ -111,7 +111,8 @@ export function drawButton(ctx: CanvasRenderingContext2D, b: Button, pressed = f
   ctx.save();
   ctx.translate(0, dy);
   panel(ctx, b.x, b.y, b.w, b.h, a, c, Math.min(28, b.h / 2.4));
-  const size = Math.min(40, b.h * 0.42);
+  // Shrink long labels so they always fit inside the button.
+  const size = Math.min(40, b.h * 0.42, (b.w - 24) / Math.max(1, b.label.length * 0.68));
   if (b.sub) {
     text(ctx, b.label, b.x + b.w / 2, b.y + b.h * 0.4, size);
     text(ctx, b.sub, b.x + b.w / 2, b.y + b.h * 0.74, size * 0.6, '#fff8c4');
@@ -463,7 +464,7 @@ export function drawEnemy(
     paintEnemy(g, kind, r, t, phase);
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.globalCompositeOperation = 'source-atop';
-    g.fillStyle = flash > 0 ? `rgba(255,255,255,${0.8 * flash})` : 'rgba(120,220,255,0.5)';
+    g.fillStyle = flash > 0 ? `rgba(255,255,255,${0.55 * flash})` : 'rgba(120,220,255,0.5)';
     g.fillRect(0, 0, px, px);
     ctx.drawImage(tintCanvas, 0, 0, px, px, x - size / 2, y - size / 2, size, size);
     return;

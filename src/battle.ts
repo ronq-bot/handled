@@ -272,7 +272,8 @@ export class Battle implements Scene {
   spawn(kind: EnemyKind, x?: number, y?: number) {
     const def = ENEMIES[kind];
     const hpMul = this.survival ? 1 + this.time / 40 + Math.pow(this.time / 120, 2) : this.hpMul;
-    const hp = def.hp * hpMul * (def.boss ? 1 : 1);
+    // Bosses scale a little slower than the crowd so they stay beatable.
+    const hp = def.hp * (def.boss ? Math.pow(hpMul, 0.85) : hpMul);
     this.enemies.push({
       def, x: Math.max(60, Math.min(W - 60, x ?? 90 + Math.random() * (W - 180))), y: y ?? this.fieldTop - 20,
       hp, maxHp: hp, speed: def.speed * (0.9 + Math.random() * 0.2) * (this.survival ? 1 + Math.min(0.6, this.time / 300) : 1 + Math.min(0.3, this.area * 0.01)),
@@ -566,7 +567,7 @@ export class Battle implements Scene {
     for (const e of this.enemies) {
       if (e.dead) continue;
       e.spawnT += dt;
-      e.flash = Math.max(0, e.flash - dt * 6);
+      e.flash = Math.max(0, e.flash - dt * 10);
       e.slowT = Math.max(0, e.slowT - dt);
       e.freezeT = Math.max(0, e.freezeT - dt);
       const scale = this.persp(e.y);

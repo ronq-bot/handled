@@ -26,8 +26,8 @@ unchecked item each iteration.
 - [x] Pause on background / resume
 
 ## App Store submission kit
-- [ ] Screenshots (6.9" + 13" iPad) captured from the game
-- [ ] Listing copy: name, subtitle, description, keywords
-- [ ] Privacy policy page (no data collected) + support page
-- [ ] Age rating answers, App Privacy "Data Not Collected"
-- [ ] Step-by-step submission guide (Xcode archive → TestFlight → review)
+- [x] Screenshots (6.9" + 13" iPad) captured from the game
+- [x] Listing copy: name, subtitle, description, keywords
+- [x] Privacy policy page (no data collected) + support page
+- [x] Age rating answers, App Privacy "Data Not Collected"
+- [x] Step-by-step submission guide (Xcode archive → TestFlight → review)
